@@ -1,0 +1,149 @@
+// PetCare — Prisma schema
+// Docs: https://www.prisma.io/docs
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  VET
+  PET_OWNER
+}
+
+enum PetSpecies {
+  DOG
+  CAT
+  BIRD
+  RABBIT
+  REPTILE
+  FISH
+  OTHER
+}
+
+enum PetGender {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+// ──────────────────────────────────────────────
+// Models
+// ──────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  firstName    String
+  lastName     String
+  phone        String?
+  role         Role     @default(PET_OWNER)
+  isActive     Boolean  @default(true)
+  refreshToken String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  pets         Pet[]
+  vetProfile   Vet?
+  appointments Appointment[] @relation("OwnerAppointments")
+
+  @@index([role])
+  @@map("users")
+}
+
+model Vet {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  specialization String?
+  licenseNumber  String?  @unique
+  bio            String?
+  yearsExp       Int      @default(0)
+  isAvailable    Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[] @relation("VetAppointments")
+
+  @@map("vets")
+}
+
+model Pet {
+  id        String     @id @default(uuid())
+  name      String
+  species   PetSpecies @default(OTHER)
+  breed     String?
+  gender    PetGender  @default(UNKNOWN)
+  birthDate DateTime?
+  weightKg  Float?
+  notes     String?
+  ownerId   String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  owner        User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([ownerId])
+  @@map("pets")
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  priceCents  Int      @default(0)
+  durationMin Int      @default(30)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  appointments Appointment[]
+
+  @@map("services")
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  scheduledAt DateTime
+  status      AppointmentStatus @default(PENDING)
+  reason      String?
+  notes       String?
+
+  petId     String
+  ownerId   String
+  vetId     String?
+  serviceId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pet     Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  owner   User     @relation("OwnerAppointments", fields: [ownerId], references: [id], onDelete: Cascade)
+  vet     Vet?     @relation("VetAppointments", fields: [vetId], references: [id], onDelete: SetNull)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([vetId])
+  @@index([status])
+  @@map("appointments")
+}
