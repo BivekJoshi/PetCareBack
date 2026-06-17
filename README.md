@@ -77,6 +77,16 @@ npm run dev              # nodemon, http://localhost:8081
 
 Health check: `GET http://localhost:8081/health`
 
+## API docs (Swagger)
+
+Interactive OpenAPI docs are served once the app is running:
+
+- Swagger UI: `http://localhost:8081/api/docs`
+- Raw OpenAPI spec: `http://localhost:8081/api/docs.json`
+
+Click **Authorize** and paste the `token` from a login/register response to try
+authenticated endpoints. The spec is defined in [`src/config/swagger.js`](src/config/swagger.js).
+
 ## Authentication
 
 - `POST /api/v1/auth/register` — self sign-up (PET_OWNER / VET)

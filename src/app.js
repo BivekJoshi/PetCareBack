@@ -4,8 +4,10 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
+import swaggerUi from 'swagger-ui-express';
 
 import { env } from './config/env.js';
+import { openapiSpec } from './config/swagger.js';
 import apiRoutes from './routes/index.js';
 import { authController } from './modules/auth/auth.controller.js';
 import { validate } from './middlewares/validate.middleware.js';
@@ -17,6 +19,18 @@ import { errorHandler } from './middlewares/error.middleware.js';
 const app = express();
 
 app.set('trust proxy', 1);
+
+// ── API docs (Swagger UI) ──────────────────────
+// Mounted before helmet so its default CSP doesn't block Swagger UI's assets.
+app.get('/api/docs.json', (_req, res) => res.json(openapiSpec));
+app.use(
+  '/api/docs',
+  swaggerUi.serve,
+  swaggerUi.setup(openapiSpec, {
+    customSiteTitle: 'PetCare API Docs',
+    swaggerOptions: { persistAuthorization: true },
+  }),
+);
 
 // ── Security & parsing ─────────────────────────
 app.use(helmet());
