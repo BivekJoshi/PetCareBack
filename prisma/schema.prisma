@@ -1,4 +1,8 @@
 // PetCare — Prisma schema
+// A national pet registry + animal-health platform.
+//   • Pet owners register every pet (civic mandate) with a geo-tagged location.
+//   • Government / municipality / ward bodies count and plan from that registry.
+//   • Vets verify a pet by its public CODE before treating or prescribing.
 // Docs: https://www.prisma.io/docs
 
 generator client {
@@ -16,7 +20,7 @@ datasource db {
 
 enum Role {
   SUPER_ADMIN
-  ADMIN
+  ADMIN // government / municipality officer
   VET
   PET_OWNER
 }
@@ -28,6 +32,8 @@ enum PetSpecies {
   RABBIT
   REPTILE
   FISH
+  CATTLE
+  GOAT
   OTHER
 }
 
@@ -44,68 +50,292 @@ enum AppointmentStatus {
   CANCELLED
 }
 
+// Administrative hierarchy (Nepal context, but generic):
+// PROVINCE → DISTRICT → MUNICIPALITY (Metropolitan / Sub-Metro / Municipality /
+// Rural Municipality a.k.a. Gaunpalika / VDC) → WARD
+enum AreaLevel {
+  PROVINCE
+  DISTRICT
+  MUNICIPALITY
+  WARD
+}
+
+enum VaccinationStatus {
+  SCHEDULED
+  ADMINISTERED
+  OVERDUE
+  SKIPPED
+}
+
+enum RecordType {
+  CHECKUP
+  TREATMENT
+  PRESCRIPTION
+  DIET
+  SURGERY
+}
+
+enum ReminderType {
+  VACCINE
+  CHECKUP
+  DEWORMING
+  CARE_TIP
+  GENERAL
+}
+
+enum ReminderChannel {
+  PUSH
+  SMS
+  EMAIL
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  READ
+  DISMISSED
+}
+
 // ──────────────────────────────────────────────
-// Models
+// Identity
 // ──────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String  @id @default(uuid())
+  email        String  @unique
   password     String
   firstName    String
   lastName     String
   phone        String?
-  role         Role     @default(PET_OWNER)
-  isActive     Boolean  @default(true)
+  role         Role    @default(PET_OWNER)
+  isActive     Boolean @default(true)
   refreshToken String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+
+  // Where the owner lives — used to seed a pet's location and for census rollups.
+  areaId    String?
+  latitude  Float?
+  longitude Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   pets         Pet[]
   vetProfile   Vet?
-  appointments Appointment[] @relation("OwnerAppointments")
+  appointments Appointment[]       @relation("OwnerAppointments")
+  reminders    Reminder[]
+  area         AdministrativeArea? @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
   @@index([role])
+  @@index([areaId])
   @@map("users")
 }
 
+// ──────────────────────────────────────────────
+// Geography — administrative hierarchy
+// ──────────────────────────────────────────────
+
+model AdministrativeArea {
+  id        String    @id @default(uuid())
+  name      String
+  level     AreaLevel
+  code      String?   @unique // official government code, if any
+  latitude  Float? // centroid, for map display
+  longitude Float?
+
+  // Self-relation builds the province → district → municipality → ward tree.
+  parentId String?
+  parent   AdministrativeArea?  @relation("AreaHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children AdministrativeArea[] @relation("AreaHierarchy")
+
+  pets    Pet[]
+  clinics Clinic[]
+  users   User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([level])
+  @@index([parentId])
+  @@map("administrative_areas")
+}
+
+// ──────────────────────────────────────────────
+// Veterinary side
+// ──────────────────────────────────────────────
+
+model Clinic {
+  id        String  @id @default(uuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  latitude  Float?
+  longitude Float?
+  isActive  Boolean @default(true)
+
+  areaId String?
+  area   AdministrativeArea? @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  vets   Vet[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([areaId])
+  @@map("clinics")
+}
+
 model Vet {
-  id             String   @id @default(uuid())
-  userId         String   @unique
+  id             String  @id @default(uuid())
+  userId         String  @unique
   specialization String?
-  licenseNumber  String?  @unique
+  licenseNumber  String? @unique
   bio            String?
-  yearsExp       Int      @default(0)
-  isAvailable    Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  yearsExp       Int     @default(0)
+  isAvailable    Boolean @default(true)
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  appointments Appointment[] @relation("VetAppointments")
+  clinicId String?
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic       Clinic?         @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  appointments Appointment[]   @relation("VetAppointments")
+  vaccinations Vaccination[]
+  records      MedicalRecord[]
+
+  @@index([clinicId])
   @@map("vets")
 }
 
-model Pet {
-  id        String     @id @default(uuid())
-  name      String
-  species   PetSpecies @default(OTHER)
-  breed     String?
-  gender    PetGender  @default(UNKNOWN)
-  birthDate DateTime?
-  weightKg  Float?
-  notes     String?
-  ownerId   String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+// ──────────────────────────────────────────────
+// Pets — the heart of the registry
+// ──────────────────────────────────────────────
 
-  owner        User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+model Pet {
+  id           String     @id @default(uuid())
+  code         String     @unique // public registration code vets ask for, e.g. NP-PET-7F3K9
+  name         String
+  species      PetSpecies @default(OTHER)
+  breed        String?
+  gender       PetGender  @default(UNKNOWN)
+  birthDate    DateTime?
+  weightKg     Float?
+  color        String?
+  microchipId  String?    @unique
+  photoUrl     String?
+  isSterilized Boolean    @default(false)
+  isRegistered Boolean    @default(true) // civic registration status
+  notes        String?
+
+  // Geo-location for census / mapping.
+  latitude  Float?
+  longitude Float?
+  areaId    String?
+
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner        User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  area         AdministrativeArea? @relation(fields: [areaId], references: [id], onDelete: SetNull)
   appointments Appointment[]
+  vaccinations Vaccination[]
+  records      MedicalRecord[]
+  reminders    Reminder[]
 
   @@index([ownerId])
+  @@index([areaId])
+  @@index([species])
   @@map("pets")
 }
+
+// ──────────────────────────────────────────────
+// Clinical records
+// ──────────────────────────────────────────────
+
+model Vaccination {
+  id             String            @id @default(uuid())
+  petId          String
+  vetId          String?
+  vaccineName    String
+  doseNumber     Int               @default(1)
+  status         VaccinationStatus @default(SCHEDULED)
+  administeredAt DateTime?
+  nextDueAt      DateTime? // drives reminders + government subsidy planning
+  batchNo        String?
+  isSubsidized   Boolean           @default(false)
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pet Pet  @relation(fields: [petId], references: [id], onDelete: Cascade)
+  vet Vet? @relation(fields: [vetId], references: [id], onDelete: SetNull)
+
+  @@index([petId])
+  @@index([status])
+  @@index([nextDueAt])
+  @@map("vaccinations")
+}
+
+// A vet logs this AFTER verifying the pet by its code, during/after a visit.
+model MedicalRecord {
+  id            String     @id @default(uuid())
+  petId         String
+  vetId         String?
+  appointmentId String?
+  type          RecordType @default(CHECKUP)
+  diagnosis     String?
+  treatment     String?
+  medicine      String? // prescribed medicine
+  diet          String? // prescribed food / diet
+  instructions  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pet         Pet          @relation(fields: [petId], references: [id], onDelete: Cascade)
+  vet         Vet?         @relation(fields: [vetId], references: [id], onDelete: SetNull)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([petId])
+  @@index([vetId])
+  @@map("medical_records")
+}
+
+// ──────────────────────────────────────────────
+// Engagement — reminders & notifications
+// ──────────────────────────────────────────────
+
+model Reminder {
+  id      String          @id @default(uuid())
+  userId  String
+  petId   String?
+  type    ReminderType    @default(GENERAL)
+  channel ReminderChannel @default(PUSH)
+  title   String
+  message String
+  dueAt   DateTime
+  sentAt  DateTime?
+  status  ReminderStatus  @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pet  Pet? @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([dueAt])
+  @@map("reminders")
+}
+
+// ──────────────────────────────────────────────
+// Services & appointments
+// ──────────────────────────────────────────────
 
 model Service {
   id          String   @id @default(uuid())
@@ -137,10 +367,11 @@ model Appointment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  pet     Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
-  owner   User     @relation("OwnerAppointments", fields: [ownerId], references: [id], onDelete: Cascade)
-  vet     Vet?     @relation("VetAppointments", fields: [vetId], references: [id], onDelete: SetNull)
-  service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  pet     Pet             @relation(fields: [petId], references: [id], onDelete: Cascade)
+  owner   User            @relation("OwnerAppointments", fields: [ownerId], references: [id], onDelete: Cascade)
+  vet     Vet?            @relation("VetAppointments", fields: [vetId], references: [id], onDelete: SetNull)
+  service Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  records MedicalRecord[]
 
   @@index([ownerId])
   @@index([vetId])

@@ -1,10 +1,33 @@
 import { z } from 'zod';
 
-const SPECIES = ['DOG', 'CAT', 'BIRD', 'RABBIT', 'REPTILE', 'FISH', 'OTHER'];
+const SPECIES = ['DOG', 'CAT', 'BIRD', 'RABBIT', 'REPTILE', 'FISH', 'CATTLE', 'GOAT', 'OTHER'];
 const GENDER = ['MALE', 'FEMALE', 'UNKNOWN'];
 
 export const idParam = {
   params: z.object({ id: z.string().uuid('Invalid id') }),
+};
+
+export const lookupCodeSchema = {
+  params: z.object({ code: z.string().min(3, 'Pet code is required') }),
+};
+
+const geoFields = {
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  areaId: z.string().uuid().optional(),
+};
+
+const sharedFields = {
+  breed: z.string().optional(),
+  gender: z.enum(GENDER).optional(),
+  birthDate: z.coerce.date().optional(),
+  weightKg: z.number().positive().optional(),
+  color: z.string().optional(),
+  microchipId: z.string().optional(),
+  photoUrl: z.string().url().optional(),
+  isSterilized: z.boolean().optional(),
+  notes: z.string().optional(),
+  ...geoFields,
 };
 
 export const listPetsSchema = {
@@ -20,11 +43,7 @@ export const createPetSchema = {
   body: z.object({
     name: z.string().min(1, 'Name is required'),
     species: z.enum(SPECIES).optional(),
-    breed: z.string().optional(),
-    gender: z.enum(GENDER).optional(),
-    birthDate: z.coerce.date().optional(),
-    weightKg: z.number().positive().optional(),
-    notes: z.string().optional(),
+    ...sharedFields,
     // Admins may assign an owner; owners default to themselves (set in controller).
     ownerId: z.string().uuid().optional(),
   }),
@@ -36,11 +55,7 @@ export const updatePetSchema = {
     .object({
       name: z.string().min(1).optional(),
       species: z.enum(SPECIES).optional(),
-      breed: z.string().optional(),
-      gender: z.enum(GENDER).optional(),
-      birthDate: z.coerce.date().optional(),
-      weightKg: z.number().positive().optional(),
-      notes: z.string().optional(),
+      ...sharedFields,
     })
     .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' }),
 };

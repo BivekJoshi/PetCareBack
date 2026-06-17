@@ -9,7 +9,43 @@ const hash = (pw) => bcrypt.hash(pw, SALT_ROUNDS);
 async function main() {
   console.log('Seeding database…');
 
-  // ── Super admin ──────────────────────────────
+  // ── Administrative areas (province → district → municipality → ward) ──
+  const province = await prisma.administrativeArea.upsert({
+    where: { code: 'P3' },
+    update: {},
+    create: { name: 'Bagmati', level: 'PROVINCE', code: 'P3' },
+  });
+  const district = await prisma.administrativeArea.upsert({
+    where: { code: 'P3-KTM' },
+    update: {},
+    create: { name: 'Kathmandu', level: 'DISTRICT', code: 'P3-KTM', parentId: province.id },
+  });
+  const municipality = await prisma.administrativeArea.upsert({
+    where: { code: 'P3-KTM-KMC' },
+    update: {},
+    create: {
+      name: 'Kathmandu Metropolitan City',
+      level: 'MUNICIPALITY',
+      code: 'P3-KTM-KMC',
+      parentId: district.id,
+      latitude: 27.7172,
+      longitude: 85.324,
+    },
+  });
+  const ward = await prisma.administrativeArea.upsert({
+    where: { code: 'P3-KTM-KMC-10' },
+    update: {},
+    create: {
+      name: 'Ward 10',
+      level: 'WARD',
+      code: 'P3-KTM-KMC-10',
+      parentId: municipality.id,
+      latitude: 27.7,
+      longitude: 85.32,
+    },
+  });
+
+  // ── Super admin (government officer) ─────────────
   const superAdmin = await prisma.user.upsert({
     where: { email: 'admin@petcare.test' },
     update: {},
@@ -19,6 +55,7 @@ async function main() {
       firstName: 'Super',
       lastName: 'Admin',
       role: 'SUPER_ADMIN',
+      areaId: municipality.id,
     },
   });
 
@@ -32,10 +69,13 @@ async function main() {
       firstName: 'Pat',
       lastName: 'Owner',
       role: 'PET_OWNER',
+      areaId: ward.id,
+      latitude: 27.701,
+      longitude: 85.321,
     },
   });
 
-  // ── Vet (user + profile) ─────────────────────
+  // ── Vet (user + clinic + profile) ────────────
   const vetUser = await prisma.user.upsert({
     where: { email: 'vet@petcare.test' },
     update: {},
@@ -45,14 +85,31 @@ async function main() {
       firstName: 'Vera',
       lastName: 'Vet',
       role: 'VET',
+      areaId: ward.id,
     },
   });
 
-  await prisma.vet.upsert({
+  const clinic = await prisma.clinic.upsert({
+    where: { id: 'seed-clinic-0001' },
+    update: {},
+    create: {
+      id: 'seed-clinic-0001',
+      name: 'Bagmati Animal Care',
+      phone: '+977-1-5550000',
+      email: 'clinic@petcare.test',
+      address: 'New Road, Ward 10',
+      areaId: ward.id,
+      latitude: 27.702,
+      longitude: 85.319,
+    },
+  });
+
+  const vet = await prisma.vet.upsert({
     where: { userId: vetUser.id },
     update: {},
     create: {
       userId: vetUser.id,
+      clinicId: clinic.id,
       specialization: 'General Practice',
       licenseNumber: 'VET-0001',
       yearsExp: 6,
@@ -71,16 +128,47 @@ async function main() {
     await prisma.service.upsert({ where: { name: s.name }, update: {}, create: s });
   }
 
-  // ── A sample pet ─────────────────────────────
-  const existingPet = await prisma.pet.findFirst({ where: { ownerId: owner.id, name: 'Rex' } });
-  if (!existingPet) {
-    await prisma.pet.create({
+  // ── A sample registered pet ──────────────────
+  let pet = await prisma.pet.findFirst({ where: { ownerId: owner.id, name: 'Rex' } });
+  if (!pet) {
+    pet = await prisma.pet.create({
       data: {
+        code: 'NP-PET-REX01',
         name: 'Rex',
         species: 'DOG',
         breed: 'Labrador',
         gender: 'MALE',
         ownerId: owner.id,
+        areaId: ward.id,
+        latitude: 27.701,
+        longitude: 85.321,
+        isRegistered: true,
+      },
+    });
+
+    // A sample vaccination with a future due date (feeds reminders).
+    await prisma.vaccination.create({
+      data: {
+        petId: pet.id,
+        vetId: vet.id,
+        vaccineName: 'Rabies',
+        doseNumber: 1,
+        status: 'ADMINISTERED',
+        administeredAt: new Date('2026-06-01T00:00:00Z'),
+        nextDueAt: new Date('2027-06-01T00:00:00Z'),
+        isSubsidized: true,
+      },
+    });
+
+    // A care-tip reminder for the owner.
+    await prisma.reminder.create({
+      data: {
+        userId: owner.id,
+        petId: pet.id,
+        type: 'CARE_TIP',
+        title: 'Summer hydration',
+        message: 'Keep Rex hydrated and avoid midday walks during the heat.',
+        dueAt: new Date('2026-06-20T00:00:00Z'),
       },
     });
   }
@@ -89,6 +177,7 @@ async function main() {
   console.log('  Super admin : admin@petcare.test / Admin@123');
   console.log('  Pet owner   : owner@petcare.test / Owner@123');
   console.log('  Vet         : vet@petcare.test   / Vet@1234');
+  console.log('  Sample pet code : NP-PET-REX01');
   void superAdmin;
 }
 

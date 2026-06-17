@@ -5,6 +5,11 @@ import petRoutes from '../modules/pets/pet.routes.js';
 import vetRoutes from '../modules/vets/vet.routes.js';
 import serviceRoutes from '../modules/services/service.routes.js';
 import appointmentRoutes from '../modules/appointments/appointment.routes.js';
+import vaccinationRoutes from '../modules/vaccinations/vaccination.routes.js';
+import recordRoutes from '../modules/records/record.routes.js';
+import reminderRoutes from '../modules/reminders/reminder.routes.js';
+import areaRoutes from '../modules/areas/area.routes.js';
+import statsRoutes from '../modules/stats/stats.routes.js';
 
 const router = Router();
 
@@ -18,5 +23,10 @@ router.use('/pets', petRoutes);
 router.use('/vets', vetRoutes);
 router.use('/services', serviceRoutes);
 router.use('/appointments', appointmentRoutes);
+router.use('/vaccinations', vaccinationRoutes);
+router.use('/records', recordRoutes);
+router.use('/reminders', reminderRoutes);
+router.use('/areas', areaRoutes);
+router.use('/stats', statsRoutes);
 
 export default router;

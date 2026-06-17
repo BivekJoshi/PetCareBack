@@ -13,6 +13,11 @@ export const petController = {
     sendSuccess(res, { message: 'Pet fetched', data });
   }),
 
+  lookupByCode: asyncHandler(async (req, res) => {
+    const data = await petService.lookupByCode(req.params.code, req.user);
+    sendSuccess(res, { message: 'Pet found', data });
+  }),
+
   create: asyncHandler(async (req, res) => {
     const data = await petService.create(req.body, req.user);
     sendSuccess(res, { statusCode: 201, message: 'Pet created', data });
