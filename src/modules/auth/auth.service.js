@@ -9,6 +9,7 @@ import {
 } from '../../utils/jwt.js';
 import { env, exposeDevOtp } from '../../config/env.js';
 import { sendWhatsAppOtp } from '../../services/whatsapp.service.js';
+import { sendOtpEmail } from '../../services/mail.service.js';
 import { settingsService } from '../admin/settings.service.js';
 
 // Fields safe to return to the client.
@@ -19,6 +20,7 @@ const publicUser = {
   lastName: true,
   phone: true,
   phoneVerified: true,
+  emailVerified: true,
   role: true,
   isActive: true,
   createdAt: true,
@@ -27,6 +29,28 @@ const publicUser = {
 const MAX_OTP_ATTEMPTS = 5;
 
 const generateOtp = () => String(randomInt(0, 1_000_000)).padStart(6, '0');
+
+// Verification channels share one OTP engine; only these bits differ per channel.
+const OTP_CHANNELS = {
+  email: {
+    label: 'Email',
+    delegate: prisma.emailOtp,
+    verifiedField: 'emailVerified',
+    target: (u) => u.email,
+    isEnabled: () => settingsService.isEmailOtpEnabled(),
+    send: (to, code, u) => sendOtpEmail(to, code, { firstName: u.firstName }),
+    devExposed: () => exposeDevOtp.email,
+  },
+  phone: {
+    label: 'Phone',
+    delegate: prisma.phoneOtp,
+    verifiedField: 'phoneVerified',
+    target: (u) => u.phone,
+    isEnabled: () => settingsService.isOtpEnabled(),
+    send: (to, code) => sendWhatsAppOtp(to, code),
+    devExposed: () => exposeDevOtp.phone,
+  },
+};
 
 const buildTokens = (user) => {
   const payload = { sub: user.id, role: user.role, email: user.email };
@@ -68,52 +92,57 @@ export const authService = {
       data: { refreshToken: tokens.refreshToken },
     });
 
-    // Kick off WhatsApp phone verification — but only if a super admin has it
-    // enabled. When disabled, no OTP is sent and none is required (the client
-    // skips the verification step entirely). Best-effort: registration still
-    // succeeds (account is just "unverified") if delivery fails.
-    const otpEnabled = await settingsService.isOtpEnabled();
-    let otp = { required: otpEnabled, sent: false };
-    if (otpEnabled && user.phone) {
+    // Kick off verification for each channel a super admin has enabled. When a
+    // channel is off, no code is sent and none is required (the client skips
+    // it). Best-effort: registration still succeeds if delivery fails.
+    const verification = {};
+    for (const channel of Object.keys(OTP_CHANNELS)) {
+      const ch = OTP_CHANNELS[channel];
+      const enabled = await ch.isEnabled();
+      const target = ch.target(user);
+      if (!enabled || !target) {
+        verification[channel] = { required: Boolean(enabled), sent: false };
+        continue;
+      }
       try {
-        otp = { required: true, ...(await this.issuePhoneOtp(user.id, user.phone)) };
+        verification[channel] = { required: true, ...(await this.issueOtp(channel, user.id)) };
       } catch (err) {
-        otp = { required: true, sent: false, error: err.message };
+        verification[channel] = { required: true, sent: false, error: err.message };
       }
     }
 
-    return { ...authPayload(user, tokens), otp };
+    return { ...authPayload(user, tokens), verification };
   },
 
   /**
-   * Generate a fresh OTP for a user, store its hash with a TTL, and deliver it
-   * over WhatsApp. Enforces a per-user resend cooldown. Returns delivery info
-   * (and, in dev with no provider, the code itself so the UI can show it).
+   * Generate a fresh OTP for `channel`, store its hash with a TTL, and deliver
+   * it (email or WhatsApp). Enforces a per-user resend cooldown. Returns
+   * delivery info (and, in dev with no real sender, the code itself).
    */
-  async issuePhoneOtp(userId, phoneArg) {
-    if (!(await settingsService.isOtpEnabled())) {
-      throw ApiError.badRequest('Phone verification is currently disabled');
+  async issueOtp(channel, userId) {
+    const ch = OTP_CHANNELS[channel];
+    if (!ch) throw ApiError.badRequest('Unknown verification channel');
+    if (!(await ch.isEnabled())) {
+      throw ApiError.badRequest(`${ch.label} verification is currently disabled`);
     }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, phone: true, phoneVerified: true },
+      select: { id: true, email: true, firstName: true, phone: true, phoneVerified: true, emailVerified: true },
     });
     if (!user) throw ApiError.notFound('User not found');
-    if (user.phoneVerified) throw ApiError.badRequest('Phone number already verified');
+    if (user[ch.verifiedField]) throw ApiError.badRequest(`${ch.label} already verified`);
 
-    const phone = phoneArg || user.phone;
-    if (!phone) throw ApiError.badRequest('No phone number on file to verify');
+    const target = ch.target(user);
+    if (!target) throw ApiError.badRequest(`No ${channel} on file to verify`);
 
     // Resend cooldown — block rapid re-sends.
-    const existing = await prisma.phoneOtp.findUnique({ where: { userId } });
+    const existing = await ch.delegate.findUnique({ where: { userId } });
     if (existing) {
       const elapsedSec = (Date.now() - new Date(existing.lastSentAt).getTime()) / 1000;
       const wait = Math.ceil(env.whatsapp.resendCooldownSec - elapsedSec);
       if (wait > 0) {
-        throw ApiError.tooManyRequests(
-          `Please wait ${wait}s before requesting another code`,
-        );
+        throw ApiError.tooManyRequests(`Please wait ${wait}s before requesting another code`);
       }
     }
 
@@ -121,56 +150,57 @@ export const authService = {
     const codeHash = await hashPassword(code);
     const expiresAt = new Date(Date.now() + env.whatsapp.otpTtlMinutes * 60_000);
 
-    await prisma.phoneOtp.upsert({
+    await ch.delegate.upsert({
       where: { userId },
       create: { userId, codeHash, expiresAt, attempts: 0, lastSentAt: new Date() },
       update: { codeHash, expiresAt, attempts: 0, lastSentAt: new Date() },
     });
 
-    await sendWhatsAppOtp(phone, code);
+    await ch.send(target, code, user);
 
     return {
       sent: true,
-      phone,
+      channel,
+      destination: target,
       expiresAt,
-      // Only present in dev when no real provider is wired up.
-      ...(exposeDevOtp ? { devCode: code } : {}),
+      // Only present in dev when this channel has no real sender configured.
+      ...(ch.devExposed() ? { devCode: code } : {}),
     };
   },
 
   /**
-   * Verify a submitted OTP. On success marks the phone verified and clears the
-   * pending code. Wrong codes count toward an attempt cap.
+   * Verify a submitted OTP for `channel`. On success marks the matching field
+   * verified and clears the pending code. Wrong codes count toward a cap.
    */
-  async verifyPhoneOtp(userId, code) {
-    const record = await prisma.phoneOtp.findUnique({ where: { userId } });
+  async verifyOtp(channel, userId, code) {
+    const ch = OTP_CHANNELS[channel];
+    if (!ch) throw ApiError.badRequest('Unknown verification channel');
+
+    const record = await ch.delegate.findUnique({ where: { userId } });
     if (!record) throw ApiError.badRequest('No verification in progress. Request a new code.');
 
     if (new Date(record.expiresAt).getTime() < Date.now()) {
-      await prisma.phoneOtp.delete({ where: { userId } }).catch(() => {});
+      await ch.delegate.delete({ where: { userId } }).catch(() => {});
       throw ApiError.badRequest('Code has expired. Request a new one.');
     }
     if (record.attempts >= MAX_OTP_ATTEMPTS) {
-      await prisma.phoneOtp.delete({ where: { userId } }).catch(() => {});
+      await ch.delegate.delete({ where: { userId } }).catch(() => {});
       throw ApiError.tooManyRequests('Too many incorrect attempts. Request a new code.');
     }
 
     const ok = await comparePassword(code, record.codeHash);
     if (!ok) {
-      await prisma.phoneOtp.update({
-        where: { userId },
-        data: { attempts: { increment: 1 } },
-      });
+      await ch.delegate.update({ where: { userId }, data: { attempts: { increment: 1 } } });
       throw ApiError.badRequest('Incorrect code');
     }
 
     const [user] = await prisma.$transaction([
       prisma.user.update({
         where: { id: userId },
-        data: { phoneVerified: true },
+        data: { [ch.verifiedField]: true },
         select: publicUser,
       }),
-      prisma.phoneOtp.delete({ where: { userId } }),
+      ch.delegate.delete({ where: { userId } }),
     ]);
     return user;
   },
@@ -234,6 +264,10 @@ export const authService = {
 
   /** Public auth-related config the client needs before/independent of login. */
   async publicConfig() {
-    return { otpEnabled: await settingsService.isOtpEnabled() };
+    const settings = await settingsService.getAuthSettings();
+    return {
+      otpEnabled: settings.otpEnabled,
+      emailOtpEnabled: settings.emailOtpEnabled,
+    };
   },
 };

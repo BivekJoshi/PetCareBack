@@ -56,6 +56,17 @@ export const env = {
     otpTtlMinutes: Number(process.env.OTP_TTL_MINUTES || 10),
     resendCooldownSec: Number(process.env.OTP_RESEND_COOLDOWN_SEC || 30),
   },
+
+  // Email (SMTP, e.g. Mailtrap) for sending the email OTP. Optional — when
+  // unconfigured the code is logged to the console and surfaced in dev so the
+  // flow is testable without a mailbox.
+  mail: {
+    host: process.env.MAIL_HOST || '',
+    port: Number(process.env.MAIL_PORT || 2525),
+    user: process.env.MAIL_USER || '',
+    pass: process.env.MAIL_PASS || '',
+    from: process.env.MAIL_FROM || 'PetCare <no-reply@petcare.app>',
+  },
 };
 
 // True only when every credential needed to talk to FCM is present.
@@ -72,6 +83,12 @@ export const isWhatsAppConfigured = Boolean(
       env.whatsapp.twilioFrom),
 );
 
-// In dev (no provider) the API echoes the OTP back so the client can show it
-// for testing. Never enabled once a real provider is configured or in prod.
-export const exposeDevOtp = !isWhatsAppConfigured && !env.isProd;
+// True when SMTP credentials for sending email are present.
+export const isMailConfigured = Boolean(env.mail.host && env.mail.user && env.mail.pass);
+
+// In dev, the API echoes a channel's OTP back so the client can show it for
+// testing — only when that channel has no real sender configured and not in prod.
+export const exposeDevOtp = {
+  phone: !isWhatsAppConfigured && !env.isProd,
+  email: !isMailConfigured && !env.isProd,
+};

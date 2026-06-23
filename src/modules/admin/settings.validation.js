@@ -13,7 +13,12 @@ export const updateRetentionSchema = {
 };
 
 export const updateAuthSettingsSchema = {
-  body: z.object({
-    otpEnabled: z.boolean({ required_error: 'otpEnabled is required' }),
-  }),
+  body: z
+    .object({
+      otpEnabled: z.boolean().optional(),
+      emailOtpEnabled: z.boolean().optional(),
+    })
+    .refine((v) => Object.keys(v).length > 0, {
+      message: 'Provide otpEnabled and/or emailOtpEnabled',
+    }),
 };

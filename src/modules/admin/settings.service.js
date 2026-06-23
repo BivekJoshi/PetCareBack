@@ -11,6 +11,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const authSettingSelect = {
   id: true,
   otpEnabled: true,
+  emailOtpEnabled: true,
   updatedAt: true,
   updatedBy: {
     select: { id: true, firstName: true, lastName: true, email: true },
@@ -59,10 +60,17 @@ export const settingsService = {
     return setting.otpEnabled;
   },
 
-  /** Update auth settings (the OTP master switch) and record who changed it. */
+  /** True when email-OTP verification is currently enabled. */
+  async isEmailOtpEnabled() {
+    const setting = await this.getAuthSettings();
+    return setting.emailOtpEnabled;
+  },
+
+  /** Update auth settings (the OTP master switches) and record who changed it. */
   async updateAuthSettings(updates, adminId) {
     const data = { updatedById: adminId };
     if (updates.otpEnabled !== undefined) data.otpEnabled = updates.otpEnabled;
+    if (updates.emailOtpEnabled !== undefined) data.emailOtpEnabled = updates.emailOtpEnabled;
     return prisma.authSetting.upsert({
       where: { id: SINGLETON_ID },
       create: { id: SINGLETON_ID, ...data },

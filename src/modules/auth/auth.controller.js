@@ -33,13 +33,23 @@ export const authController = {
     sendSuccess(res, { message: 'Auth config', data });
   }),
 
-  sendOtp: asyncHandler(async (req, res) => {
-    const data = await authService.issuePhoneOtp(req.user.id);
+  sendPhoneOtp: asyncHandler(async (req, res) => {
+    const data = await authService.issueOtp('phone', req.user.id);
     sendSuccess(res, { message: 'Verification code sent via WhatsApp', data });
   }),
 
-  verifyOtp: asyncHandler(async (req, res) => {
-    const user = await authService.verifyPhoneOtp(req.user.id, req.body.code);
+  verifyPhoneOtp: asyncHandler(async (req, res) => {
+    const user = await authService.verifyOtp('phone', req.user.id, req.body.code);
     sendSuccess(res, { message: 'Phone number verified', data: { user } });
+  }),
+
+  sendEmailOtp: asyncHandler(async (req, res) => {
+    const data = await authService.issueOtp('email', req.user.id);
+    sendSuccess(res, { message: 'Verification code sent to your email', data });
+  }),
+
+  verifyEmailOtp: asyncHandler(async (req, res) => {
+    const user = await authService.verifyOtp('email', req.user.id, req.body.code);
+    sendSuccess(res, { message: 'Email verified', data: { user } });
   }),
 };

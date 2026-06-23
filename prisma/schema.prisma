@@ -108,6 +108,7 @@ model User {
   lastName     String
   phone         String?
   phoneVerified Boolean @default(false) // WhatsApp OTP confirmed the number
+  emailVerified Boolean @default(false) // email OTP confirmed the address
   role          Role    @default(PET_OWNER)
   isActive      Boolean @default(true)
   refreshToken  String?
@@ -127,8 +128,9 @@ model User {
   reminders    Reminder[]
   area         AdministrativeArea? @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
-  // Phone (WhatsApp) verification — at most one pending OTP per user.
+  // Verification — at most one pending OTP per user, per channel.
   phoneOtp PhoneOtp?
+  emailOtp EmailOtp?
 
   // Chat / messaging
   sentMessages     Message[]     @relation("SentMessages")
@@ -159,8 +161,9 @@ model User {
 // controls. Currently a master switch for WhatsApp phone-OTP at signup — when
 // off, registration skips verification entirely (no OTP is sent or required).
 model AuthSetting {
-  id         Int     @id @default(1)
-  otpEnabled Boolean @default(true)
+  id              Int     @id @default(1)
+  otpEnabled      Boolean @default(false) // WhatsApp phone OTP (off by default)
+  emailOtpEnabled Boolean @default(true) // email OTP (primary verification)
 
   updatedById String?
   updatedBy   User?   @relation("AuthSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
@@ -185,6 +188,22 @@ model PhoneOtp {
   updatedAt  DateTime @updatedAt
 
   @@map("phone_otps")
+}
+
+// A pending email OTP for verifying a user's email address. Mirrors PhoneOtp;
+// one row per user, deleted once the email is verified.
+model EmailOtp {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  lastSentAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("email_otps")
 }
 
 // ──────────────────────────────────────────────

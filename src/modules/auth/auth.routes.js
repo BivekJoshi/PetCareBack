@@ -22,13 +22,23 @@ router.get('/me', authenticate, authController.me);
 router.get('/config', authController.config);
 
 // WhatsApp phone verification (send / resend code, then verify it).
-router.post('/phone/send-otp', authenticate, authLimiter, authController.sendOtp);
+router.post('/phone/send-otp', authenticate, authLimiter, authController.sendPhoneOtp);
 router.post(
   '/phone/verify',
   authenticate,
   authLimiter,
   validate(verifyOtpSchema),
-  authController.verifyOtp,
+  authController.verifyPhoneOtp,
+);
+
+// Email verification (send / resend code, then verify it).
+router.post('/email/send-otp', authenticate, authLimiter, authController.sendEmailOtp);
+router.post(
+  '/email/verify',
+  authenticate,
+  authLimiter,
+  validate(verifyOtpSchema),
+  authController.verifyEmailOtp,
 );
 
 export default router;
