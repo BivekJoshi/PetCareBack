@@ -2,13 +2,13 @@ import { prisma } from '../../config/prisma.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { EMAIL_TEMPLATE_DEFAULTS } from '../../templates/emailDefaults.js';
+import { EMAIL_TEMPLATE_DEFAULTS } from './emailTemplate.defaults.js';
 
 /**
  * Email templating. Each template's editable content (subject + HTML "UI") lives
  * in the DB, managed from the admin Control Panel. The mailer renders by key,
  * filling {{tokens}} with the per-send values. When a key has no DB row yet (or
- * the frontend hasn't seeded), the bundled default (emailDefaults.js) is used —
+ * the frontend hasn't seeded), the bundled default (emailTemplate.defaults.js) is used —
  * so transactional email always works, even before anything is configured.
  */
 

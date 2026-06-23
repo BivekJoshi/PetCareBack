@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { EMAIL_TEMPLATE_DEFAULTS } from '../src/templates/emailDefaults.js';
+import { EMAIL_TEMPLATE_DEFAULTS } from '../src/modules/emailTemplates/emailTemplate.defaults.js';
 
 const prisma = new PrismaClient();
 

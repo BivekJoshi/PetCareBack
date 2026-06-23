@@ -8,9 +8,9 @@ import {
   verifyRefreshToken,
 } from '../../utils/jwt.js';
 import { env, exposeDevOtp } from '../../config/env.js';
-import { sendWhatsAppOtp } from '../../services/whatsapp.service.js';
-import { sendOtpEmail, sendPasswordResetEmail } from '../../services/mail.service.js';
-import { verifyGoogleAccessToken } from '../../services/google.service.js';
+import { sendWhatsAppOtp } from '../../integrations/whatsapp.service.js';
+import { sendOtpEmail, sendPasswordResetEmail } from '../../integrations/mail.service.js';
+import { verifyGoogleAccessToken } from '../../integrations/google.service.js';
 import { settingsService } from '../admin/settings.service.js';
 
 // Fields safe to return to the client.

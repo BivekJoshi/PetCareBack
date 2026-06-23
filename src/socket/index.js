@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.js';
 import { chatService } from '../modules/chat/chat.service.js';
 import { callService } from '../modules/chat/call.service.js';
 import { groupService } from '../modules/chat/group.service.js';
-import { sendPushToUser, sendPushBroadcast } from '../services/push.service.js';
+import { sendPushToUser, sendPushBroadcast } from '../integrations/push.service.js';
 
 let io = null;
 

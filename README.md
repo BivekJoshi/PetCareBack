@@ -96,24 +96,31 @@ PetCareBack/
 │   ├── migrations/          # Versioned SQL migrations
 │   └── seed.js              # Demo data: areas, clinic, users, pet+code, vaccination, reminder
 ├── src/
-│   ├── config/              # env loader, Prisma client, Swagger spec
+│   ├── config/              # env loader, Prisma client, Swagger spec, uploads
 │   ├── middlewares/         # auth, validate, rate limit, error, 404
-│   ├── utils/               # ApiError, ApiResponse, jwt, password, asyncHandler, logger
+│   ├── utils/               # ApiError, ApiResponse, jwt, password, asyncHandler, logger, petCode
+│   ├── integrations/        # external service clients (mail, whatsapp, google, push)
 │   ├── modules/             # feature-first modules (routes → controller → service → Prisma)
-│   │   ├── auth/            # register, login, refresh, logout, me
+│   │   ├── auth/            # register, login, OTP, OAuth, password reset/change
 │   │   ├── users/           # admin user management
 │   │   ├── pets/            # owner pets (scoped)
 │   │   ├── vets/            # vet accounts + profiles
 │   │   ├── services/        # service catalogue
-│   │   └── appointments/    # bookings (role-scoped)
-│   ├── routes/index.js      # mounts all module routers under /api/v1
-│   ├── app.js               # express app (middleware + routes)
-│   └── server.js            # bootstrap + graceful shutdown
+│   │   ├── appointments/    # bookings (role-scoped)
+│   │   ├── records/ vaccinations/ reminders/ areas/ stats/
+│   │   ├── chat/           # messaging, calls, groups
+│   │   ├── emailTemplates/ # editable transactional-email templates
+│   │   └── admin/          # Control Panel: settings + mounts admin sub-routers
+│   ├── socket/             # Socket.IO server (chat, calls, presence)
+│   ├── jobs/               # scheduled jobs (e.g. chat-retention sweep)
+│   ├── routes/index.js     # mounts all module routers under /api/v1
+│   ├── app.js              # express app (middleware + routes)
+│   └── server.js           # bootstrap + graceful shutdown
 ├── .env.example
 └── package.json
 ```
 
-Each module follows the same layering: **routes → controller → service → Prisma**, with **Zod validation** at the edge. Business rules and authorization live in the service layer.
+Each module is self-contained and follows the same layering: **routes → controller → service → Prisma**, with **Zod validation** at the edge (`*.validation.js`). Business rules and authorization live in the service layer. Cross-cutting clients for third-party APIs live under `integrations/` (kept distinct from a module's domain `*.service.js`).
 
 ---
 
