@@ -2,6 +2,7 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { sendSuccess } from '../../utils/ApiResponse.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { chatService } from './chat.service.js';
+import { callService } from './call.service.js';
 import {
   dispatchDirectMessage,
   dispatchBroadcast,
@@ -112,6 +113,25 @@ export const chatController = {
   unread: asyncHandler(async (req, res) => {
     const count = await chatService.unreadCount(req.user.id);
     sendSuccess(res, { message: 'Unread count', data: { count } });
+  }),
+
+  setNickname: asyncHandler(async (req, res) => {
+    const data = await chatService.setNickname(
+      req.user.id,
+      req.params.userId,
+      req.body.label,
+    );
+    sendSuccess(res, { message: 'Nickname saved', data });
+  }),
+
+  removeNickname: asyncHandler(async (req, res) => {
+    await chatService.removeNickname(req.user.id, req.params.userId);
+    sendSuccess(res, { message: 'Nickname removed' });
+  }),
+
+  callHistory: asyncHandler(async (req, res) => {
+    const data = await callService.list(req.user.id);
+    sendSuccess(res, { message: 'Call history fetched', data });
   }),
 
   registerDevice: asyncHandler(async (req, res) => {

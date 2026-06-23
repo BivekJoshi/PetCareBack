@@ -14,9 +14,12 @@ import {
   editMessageSchema,
   deleteMessageSchema,
   forwardMessageSchema,
+  setNicknameSchema,
+  userIdParamSchema,
   registerDeviceSchema,
   removeDeviceSchema,
 } from './chat.validation.js';
+import groupRoutes from './group.routes.js';
 
 const router = Router();
 
@@ -27,6 +30,16 @@ router.use(authenticate);
 router.get('/contacts', validate(listContactsSchema), chatController.contacts);
 router.get('/conversations', chatController.conversations);
 router.get('/unread', chatController.unread);
+
+// Group sub-routes
+router.use('/groups', groupRoutes);
+
+// Per-contact nicknames (private to the owner)
+router.put('/nicknames/:userId', validate(setNicknameSchema), chatController.setNickname);
+router.delete('/nicknames/:userId', validate(userIdParamSchema), chatController.removeNickname);
+
+// Call log
+router.get('/calls', chatController.callHistory);
 
 // Direct (one-to-one) messages
 router.get('/messages/:userId', validate(threadSchema), chatController.thread);

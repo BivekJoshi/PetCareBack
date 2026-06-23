@@ -71,6 +71,15 @@ export const forwardMessageSchema = {
   body: z.object({ recipientId: z.string().uuid('Invalid recipient id') }),
 };
 
+export const setNicknameSchema = {
+  params: z.object({ userId: z.string().uuid('Invalid user id') }),
+  body: z.object({ label: z.string().trim().min(1, 'Nickname required').max(60) }),
+};
+
+export const userIdParamSchema = {
+  params: z.object({ userId: z.string().uuid('Invalid user id') }),
+};
+
 export const registerDeviceSchema = {
   body: z.object({
     token: z.string().min(1, 'Device token is required'),

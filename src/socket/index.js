@@ -5,6 +5,8 @@ import { prisma } from '../config/prisma.js';
 import { verifyAccessToken } from '../utils/jwt.js';
 import { logger } from '../utils/logger.js';
 import { chatService } from '../modules/chat/chat.service.js';
+import { callService } from '../modules/chat/call.service.js';
+import { groupService } from '../modules/chat/group.service.js';
 import { sendPushToUser, sendPushBroadcast } from '../services/push.service.js';
 
 let io = null;
@@ -105,17 +107,52 @@ export const dispatchBroadcast = (message) => {
   });
 };
 
+/** Deliver a group message to every member in real time + notify/push. */
+export const dispatchGroupMessage = (message, memberIds) => {
+  const title = fullName(message.sender) || 'New message';
+  memberIds.forEach((id) => {
+    emitToUser(id, 'message:new', message);
+    if (id !== message.senderId) {
+      emitToUser(id, 'notification:new', {
+        kind: 'group',
+        title,
+        body: preview(message),
+        groupId: message.groupId,
+        messageId: message.id,
+        createdAt: message.createdAt,
+      });
+      if (!isUserOnline(id)) {
+        sendPushToUser(id, {
+          title,
+          body: preview(message),
+          data: { kind: 'group', groupId: message.groupId, messageId: message.id },
+        });
+      }
+    }
+  });
+};
+
 /**
  * Notify participants that a message changed (edited or deleted-for-everyone).
  * The full updated message is sent so clients can replace it in place.
  */
 export const dispatchMessageUpdate = (message) => {
-  if (message.type === 'BROADCAST') {
+  if (message.type === 'GROUP') {
+    groupService
+      .memberIds(message.groupId)
+      .then((ids) => ids.forEach((id) => emitToUser(id, 'message:updated', message)))
+      .catch(() => {});
+  } else if (message.type === 'BROADCAST') {
     if (io) io.to(BROADCAST_ROOM).emit('message:updated', message);
   } else {
     emitToUser(message.recipientId, 'message:updated', message);
     emitToUser(message.senderId, 'message:updated', message);
   }
+};
+
+/** Tell a set of users their group list changed (created/renamed/members). */
+export const dispatchGroupUpdate = (memberIds, groupId) => {
+  memberIds.forEach((id) => emitToUser(id, 'group:updated', { groupId }));
 };
 
 // ── Socket auth — verify the JWT supplied in the handshake ──
@@ -190,6 +227,26 @@ const registerHandlers = (socket) => {
     }
   });
 
+  socket.on('group:send', async ({ groupId, content, attachment, replyToId } = {}, ack) => {
+    try {
+      const text = String(content || '').trim();
+      if (!groupId || (!text && !attachment)) {
+        return safeAck(ack, { ok: false, error: 'groupId and a message or file are required' });
+      }
+      const { message, memberIds } = await groupService.createMessage(
+        me.id,
+        groupId,
+        text,
+        attachment,
+        replyToId,
+      );
+      dispatchGroupMessage(message, memberIds);
+      return safeAck(ack, { ok: true, message });
+    } catch (err) {
+      return safeAck(ack, { ok: false, error: err.message || 'Failed to send message' });
+    }
+  });
+
   socket.on('message:read', async ({ otherId } = {}) => {
     if (!otherId) return;
     try {
@@ -234,6 +291,7 @@ const registerHandlers = (socket) => {
         role: me.role,
       },
     });
+    callService.start(callId, me.id, toUserId, callType).catch(() => {});
     return safeAck(ack, { ok: true, callId });
   });
 
@@ -242,14 +300,17 @@ const registerHandlers = (socket) => {
     calls.set(me.id, { callId, partnerId: toUserId });
     calls.set(toUserId, { callId, partnerId: me.id });
     emitToUser(toUserId, 'call:accepted', { callId, by: me.id });
+    callService.accept(callId).catch(() => {});
   });
 
   socket.on('call:reject', ({ callId, toUserId } = {}) => {
     if (toUserId) emitToUser(toUserId, 'call:rejected', { callId, by: me.id });
+    callService.terminal(callId, 'DECLINED').catch(() => {});
   });
 
   socket.on('call:cancel', ({ callId, toUserId } = {}) => {
     if (toUserId) emitToUser(toUserId, 'call:cancelled', { callId, by: me.id });
+    callService.terminal(callId, 'CANCELLED').catch(() => {});
   });
 
   socket.on('call:end', ({ callId, toUserId } = {}) => {
@@ -258,6 +319,7 @@ const registerHandlers = (socket) => {
       calls.delete(toUserId);
       emitToUser(toUserId, 'call:ended', { callId, by: me.id });
     }
+    callService.complete(callId).catch(() => {});
   });
 
   // SDP offer/answer + ICE candidate relays — passed straight through.
@@ -313,6 +375,7 @@ export const initSocket = (httpServer) => {
             callId: active.callId,
             by: me.id,
           });
+          callService.complete(active.callId).catch(() => {});
         }
 
         logger.info(`Socket disconnected: ${fullName(me)} (${me.id})`);

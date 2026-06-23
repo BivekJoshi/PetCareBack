@@ -132,6 +132,14 @@ model User {
   hiddenMessages   MessageHide[]
   deviceTokens     DeviceToken[]
 
+  // Nicknames, calls, groups
+  nicknamesGiven    Nickname[]    @relation("NicknamesGiven")
+  nicknamesReceived Nickname[]    @relation("NicknamesReceived")
+  callsMade         Call[]        @relation("CallsMade")
+  callsReceived     Call[]        @relation("CallsReceived")
+  groupsCreated     Group[]       @relation("GroupsCreated")
+  groupMemberships  GroupMember[] @relation("GroupMemberships")
+
   @@index([role])
   @@index([areaId])
   @@map("users")
@@ -392,6 +400,21 @@ model Appointment {
 enum MessageType {
   DIRECT // one-to-one between two users
   BROADCAST // announcement sent to every user (recipientId is null)
+  GROUP // sent to a group (groupId set, recipientId null)
+}
+
+enum CallType {
+  AUDIO
+  VIDEO
+}
+
+enum CallStatus {
+  RINGING // dialing / not yet answered
+  ONGOING // connected
+  COMPLETED // ended normally after connecting
+  MISSED // never answered (timed out / caller gave up)
+  DECLINED // recipient rejected
+  CANCELLED // caller hung up before answer
 }
 
 model Message {
@@ -426,11 +449,16 @@ model Message {
   recipientId String?
   recipient   User?   @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
 
+  // Set for GROUP messages.
+  groupId String?
+  group   Group?  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
   @@index([senderId])
   @@index([recipientId])
+  @@index([groupId, createdAt])
   @@index([type, createdAt])
   // Fast lookup of a direct thread between two users, newest first.
   @@index([senderId, recipientId, createdAt])
@@ -469,4 +497,81 @@ model DeviceToken {
 
   @@index([userId])
   @@map("device_tokens")
+}
+
+// Per-user custom display name for another user (only the owner sees it).
+model Nickname {
+  id String @id @default(uuid())
+
+  ownerId String
+  owner   User   @relation("NicknamesGiven", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  targetId String
+  target   User   @relation("NicknamesReceived", fields: [targetId], references: [id], onDelete: Cascade)
+
+  label String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, targetId])
+  @@index([ownerId])
+  @@map("nicknames")
+}
+
+// A 1:1 call log entry (created on dial, updated through its lifecycle).
+model Call {
+  id String @id @default(uuid()) // mirrors the socket callId
+
+  callerId String
+  caller   User   @relation("CallsMade", fields: [callerId], references: [id], onDelete: Cascade)
+
+  calleeId String
+  callee   User   @relation("CallsReceived", fields: [calleeId], references: [id], onDelete: Cascade)
+
+  type        CallType
+  status      CallStatus @default(RINGING)
+  startedAt   DateTime?
+  endedAt     DateTime?
+  durationSec Int        @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([callerId, createdAt])
+  @@index([calleeId, createdAt])
+  @@map("calls")
+}
+
+// A group conversation.
+model Group {
+  id   String @id @default(uuid())
+  name String
+
+  createdById String
+  createdBy   User   @relation("GroupsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+
+  members  GroupMember[]
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id String @id @default(uuid())
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("GroupMemberships", fields: [userId], references: [id], onDelete: Cascade)
+
+  isAdmin  Boolean  @default(false)
+  joinedAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
 }

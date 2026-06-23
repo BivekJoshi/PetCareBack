@@ -2,7 +2,7 @@ import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 
 // Lightweight user shape embedded in messages / conversation summaries.
-const userMini = {
+export const userMini = {
   id: true,
   firstName: true,
   lastName: true,
@@ -21,7 +21,7 @@ const replyPreviewSelect = {
   sender: { select: { id: true, firstName: true, lastName: true } },
 };
 
-const messageSelect = {
+export const messageSelect = {
   id: true,
   type: true,
   content: true,
@@ -31,6 +31,7 @@ const messageSelect = {
   attachmentSize: true,
   senderId: true,
   recipientId: true,
+  groupId: true,
   readAt: true,
   editedAt: true,
   deletedAt: true,
@@ -42,7 +43,16 @@ const messageSelect = {
 };
 
 // Exclude messages the user "deleted for me".
-const notHiddenBy = (userId) => ({ hides: { none: { userId } } });
+export const notHiddenBy = (userId) => ({ hides: { none: { userId } } });
+
+// Map of targetId → nickname for the given owner (their custom names).
+const nicknameMapFor = async (ownerId) => {
+  const rows = await prisma.nickname.findMany({
+    where: { ownerId },
+    select: { targetId: true, label: true },
+  });
+  return new Map(rows.map((r) => [r.targetId, r.label]));
+};
 
 // Pull only the attachment columns from a validated attachment payload.
 const attachmentData = (attachment) =>
@@ -72,12 +82,39 @@ export const chatService = {
         : {}),
     };
 
-    return prisma.user.findMany({
-      where,
-      select: userMini,
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-      take: 100,
+    const [users, nicknames] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: userMini,
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        take: 100,
+      }),
+      nicknameMapFor(userId),
+    ]);
+
+    return users.map((u) => ({ ...u, nickname: nicknames.get(u.id) || null }));
+  },
+
+  /** Set (or update) the current user's private nickname for someone. */
+  async setNickname(ownerId, targetId, label) {
+    if (ownerId === targetId) throw ApiError.badRequest('You cannot nickname yourself');
+    const target = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: { id: true },
     });
+    if (!target) throw ApiError.notFound('User not found');
+
+    return prisma.nickname.upsert({
+      where: { ownerId_targetId: { ownerId, targetId } },
+      create: { ownerId, targetId, label },
+      update: { label },
+      select: { targetId: true, label: true },
+    });
+  },
+
+  /** Clear a nickname (revert to the person's real name). */
+  async removeNickname(ownerId, targetId) {
+    await prisma.nickname.deleteMany({ where: { ownerId, targetId } });
   },
 
   /**
@@ -115,18 +152,21 @@ export const chatService = {
     const partnerIds = [...latestByPartner.keys()];
     if (partnerIds.length === 0) return [];
 
-    const partners = await prisma.user.findMany({
-      where: { id: { in: partnerIds } },
-      select: userMini,
-    });
+    const [partners, nicknames] = await Promise.all([
+      prisma.user.findMany({ where: { id: { in: partnerIds } }, select: userMini }),
+      nicknameMapFor(userId),
+    ]);
     const partnerById = new Map(partners.map((p) => [p.id, p]));
 
     return partnerIds
-      .map((id) => ({
-        user: partnerById.get(id),
-        lastMessage: latestByPartner.get(id),
-        unread: unreadBy.get(id) || 0,
-      }))
+      .map((id) => {
+        const user = partnerById.get(id);
+        return {
+          user: user ? { ...user, nickname: nicknames.get(id) || null } : null,
+          lastMessage: latestByPartner.get(id),
+          unread: unreadBy.get(id) || 0,
+        };
+      })
       .filter((c) => c.user) // guard against deleted accounts
       .sort(
         (a, b) =>
