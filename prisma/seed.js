@@ -47,11 +47,11 @@ async function main() {
 
   // ── Super admin (government officer) ─────────────
   const superAdmin = await prisma.user.upsert({
-    where: { email: 'admin@petcare.test' },
+    where: { email: 'admin@gmail.com' },
     update: {},
     create: {
-      email: 'admin@petcare.test',
-      password: await hash('Admin@123'),
+      email: 'admin@gmail.com',
+      password: await hash('P@ssw0rd'),
       firstName: 'Super',
       lastName: 'Admin',
       role: 'SUPER_ADMIN',
@@ -61,11 +61,11 @@ async function main() {
 
   // ── Pet owner ────────────────────────────────
   const owner = await prisma.user.upsert({
-    where: { email: 'owner@petcare.test' },
+    where: { email: 'owner@gmail.com' },
     update: {},
     create: {
-      email: 'owner@petcare.test',
-      password: await hash('Owner@123'),
+      email: 'owner@gmail.com',
+      password: await hash('P@ssw0rd'),
       firstName: 'Pat',
       lastName: 'Owner',
       role: 'PET_OWNER',
@@ -77,11 +77,11 @@ async function main() {
 
   // ── Vet (user + clinic + profile) ────────────
   const vetUser = await prisma.user.upsert({
-    where: { email: 'vet@petcare.test' },
+    where: { email: 'vet@gmail.com' },
     update: {},
     create: {
-      email: 'vet@petcare.test',
-      password: await hash('Vet@1234'),
+      email: 'vet@gmail.com',
+      password: await hash('P@ssw0rd'),
       firstName: 'Vera',
       lastName: 'Vet',
       role: 'VET',

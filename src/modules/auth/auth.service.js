@@ -9,7 +9,7 @@ import {
 } from '../../utils/jwt.js';
 import { env, exposeDevOtp } from '../../config/env.js';
 import { sendWhatsAppOtp } from '../../services/whatsapp.service.js';
-import { sendOtpEmail } from '../../services/mail.service.js';
+import { sendOtpEmail, sendPasswordResetEmail } from '../../services/mail.service.js';
 import { verifyGoogleAccessToken } from '../../services/google.service.js';
 import { settingsService } from '../admin/settings.service.js';
 
@@ -387,6 +387,94 @@ export const authService = {
       select: publicUser,
     });
     return { user: { ...updated, hasPassword: true } };
+  },
+
+  /**
+   * Start a "forgot password" reset for `email`: email a 6-digit code that the
+   * user later exchanges (with a new password) via `resetPassword`. Always
+   * resolves the same way regardless of whether the email exists, so the
+   * endpoint can't be used to probe which addresses are registered.
+   */
+  async forgotPassword(email) {
+    const generic = { sent: true };
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, firstName: true },
+    });
+    if (!user) return generic; // don't reveal whether the email exists
+
+    // Honour a resend cooldown — but silently, so timing never leaks existence.
+    const existing = await prisma.passwordResetOtp.findUnique({ where: { userId: user.id } });
+    if (existing) {
+      const elapsedSec = (Date.now() - new Date(existing.lastSentAt).getTime()) / 1000;
+      if (elapsedSec < env.whatsapp.resendCooldownSec) return generic;
+    }
+
+    const code = generateOtp();
+    const codeHash = await hashPassword(code);
+    const expiresAt = new Date(Date.now() + env.whatsapp.otpTtlMinutes * 60_000);
+
+    await prisma.passwordResetOtp.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, codeHash, expiresAt, attempts: 0, lastSentAt: new Date() },
+      update: { codeHash, expiresAt, attempts: 0, lastSentAt: new Date() },
+    });
+
+    // Best-effort delivery — a transient mail error shouldn't fail the request.
+    try {
+      await sendPasswordResetEmail(user.email, code, { firstName: user.firstName });
+    } catch {
+      /* swallow — the user can request another code */
+    }
+
+    // Only surfaced in dev when no real mailer is configured.
+    return { ...generic, ...(exposeDevOtp.email ? { devCode: code } : {}) };
+  },
+
+  /**
+   * Complete a reset: validate the emailed code and set the new password. Also
+   * marks the email verified (ownership proven) and revokes existing sessions.
+   * Wrong codes count toward the same attempt cap as other OTPs.
+   */
+  async resetPassword(email, code, password) {
+    // One opaque error for every "no valid code" case — avoids leaking details.
+    const invalid = () => ApiError.badRequest('Invalid or expired reset code');
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) throw invalid();
+
+    const record = await prisma.passwordResetOtp.findUnique({ where: { userId: user.id } });
+    if (!record) throw invalid();
+
+    if (new Date(record.expiresAt).getTime() < Date.now()) {
+      await prisma.passwordResetOtp.delete({ where: { userId: user.id } }).catch(() => {});
+      throw invalid();
+    }
+    if (record.attempts >= MAX_OTP_ATTEMPTS) {
+      await prisma.passwordResetOtp.delete({ where: { userId: user.id } }).catch(() => {});
+      throw ApiError.tooManyRequests('Too many incorrect attempts. Request a new code.');
+    }
+
+    const ok = await comparePassword(code, record.codeHash);
+    if (!ok) {
+      await prisma.passwordResetOtp.update({
+        where: { userId: user.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw invalid();
+    }
+
+    const passwordHash = await hashPassword(password);
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { password: passwordHash, emailVerified: true, refreshToken: null },
+      }),
+      prisma.passwordResetOtp.delete({ where: { userId: user.id } }),
+    ]);
+
+    return { reset: true };
   },
 
   /** Public auth-related config the client needs before/independent of login. */

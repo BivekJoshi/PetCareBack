@@ -56,6 +56,28 @@ export const setPasswordSchema = {
     }),
 };
 
+// Forgot password — request a reset code by email.
+export const forgotPasswordSchema = {
+  body: z.object({
+    email: z.string().email('A valid email is required'),
+  }),
+};
+
+// Reset password — exchange the emailed code for a new password.
+export const resetPasswordSchema = {
+  body: z
+    .object({
+      email: z.string().email('A valid email is required'),
+      code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+      password: z.string().min(6, 'Password must be at least 6 characters'),
+      confirmPassword: z.string().min(1, 'Please confirm your password'),
+    })
+    .refine((d) => d.password === d.confirmPassword, {
+      path: ['confirmPassword'],
+      message: 'Passwords do not match',
+    }),
+};
+
 // Change an existing password — current password required.
 export const changePasswordSchema = {
   body: z

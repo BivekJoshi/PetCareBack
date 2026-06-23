@@ -12,6 +12,8 @@ import {
   setPhoneSchema,
   setPasswordSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 } from './auth.validation.js';
 
 const router = Router();
@@ -25,6 +27,20 @@ router.get('/me', authenticate, authController.me);
 
 // Attach a phone number to the signed-in account (post Google sign-in).
 router.post('/phone', authenticate, authLimiter, validate(setPhoneSchema), authController.setPhone);
+
+// Forgot / reset password — public (no session), brute-force limited.
+router.post(
+  '/password/forgot',
+  authLimiter,
+  validate(forgotPasswordSchema),
+  authController.forgotPassword,
+);
+router.post(
+  '/password/reset',
+  authLimiter,
+  validate(resetPasswordSchema),
+  authController.resetPassword,
+);
 
 // Set an initial password (OAuth accounts) or change an existing one.
 router.post(

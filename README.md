@@ -1,6 +1,6 @@
 # 🐾 PetCare — National Pet Registry & Animal-Health Platform
 
-A civic-tech backend that turns scattered pet ownership into **structured, geo-tagged public-health data** — so local government (municipality / VDC / ward / community) can *count*, *plan*, and *act*, while pet owners and vets get real value in return.
+A civic-tech backend that turns scattered pet ownership into **structured, geo-tagged public-health data** — so local government (municipality / VDC / ward / community) can _count_, _plan_, and _act_, while pet owners and vets get real value in return.
 
 > **The big idea**
 > Every pet is registered once, by its owner, with a location. Every vet is registered too. Before any treatment or prescription, a vet looks up the pet by its **public code**. That single loop produces a trustworthy, location-aware census that governments can use to plan **vaccination drives, subsidies, and health campaigns** — and that owners experience as **reminders, care tips, and a portable health record** for their animals.
@@ -14,17 +14,20 @@ REST API built on the **PERN** stack (PostgreSQL · Express · React · Node) wi
 The platform serves three stakeholders at once:
 
 ### 1. Pet owners
+
 - Register **one or many** pets — across **different species** (dog, cat, bird, cattle, goat, …).
 - Each pet gets a unique **registration code** + optional microchip ID.
 - A portable **medical & vaccination history** that any registered vet can read.
 - Timely **reminders**: vaccine due dates, deworming, checkups, and seasonal **care tips**.
 
 ### 2. Veterinarians & clinics
+
 - Vets **register** and are tied to a **clinic** with a real location (scalable: many vets per clinic).
 - Before treating or prescribing medicine/food, the vet **asks for the pet's code** and pulls up its record.
 - Every treatment, prescription, and vaccination is **logged against the pet** — building its lifelong history.
 
 ### 3. Government / municipality / ward
+
 - Registration is the **civic mandate**: each pet is tied to an **administrative area** (province → district → municipality → ward) and a **latitude/longitude**.
 - Officials see **pet counts per place** for accurate planning.
 - Plan **subsidised vaccines** and campaigns from real vaccination-coverage data.
@@ -44,16 +47,16 @@ The platform serves three stakeholders at once:
 
 ## Tech stack
 
-| Concern     | Choice                          |
-| ----------- | ------------------------------- |
-| Runtime     | Node.js (ESM)                   |
-| Framework   | Express 4                       |
-| Database    | PostgreSQL                      |
-| ORM         | Prisma                          |
-| Auth        | JWT (access + refresh), bcrypt  |
-| Validation  | Zod                             |
-| Security    | helmet, cors, rate limiting     |
-| Docs        | Swagger / OpenAPI               |
+| Concern    | Choice                         |
+| ---------- | ------------------------------ |
+| Runtime    | Node.js (ESM)                  |
+| Framework  | Express 4                      |
+| Database   | PostgreSQL                     |
+| ORM        | Prisma                         |
+| Auth       | JWT (access + refresh), bcrypt |
+| Validation | Zod                            |
+| Security   | helmet, cors, rate limiting    |
+| Docs       | Swagger / OpenAPI              |
 
 ---
 
@@ -63,18 +66,18 @@ The schema (in [`prisma/schema.prisma`](prisma/schema.prisma)) is organised arou
 
 ### Core entities
 
-| Model                  | Purpose |
-| ---------------------- | ------- |
-| **User**               | One account for every actor. `role` ∈ `SUPER_ADMIN`, `ADMIN` (gov officer), `VET`, `PET_OWNER`. Carries a home `area` + lat/long. |
-| **AdministrativeArea** | Self-referential hierarchy — `PROVINCE → DISTRICT → MUNICIPALITY → WARD`. The backbone of every "count per place" query. |
+| Model                  | Purpose                                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **User**               | One account for every actor. `role` ∈ `SUPER_ADMIN`, `ADMIN` (gov officer), `VET`, `PET_OWNER`. Carries a home `area` + lat/long.                            |
+| **AdministrativeArea** | Self-referential hierarchy — `PROVINCE → DISTRICT → MUNICIPALITY → WARD`. The backbone of every "count per place" query.                                     |
 | **Pet**                | The heart of the registry. Unique **`code`** (what vets ask for), optional `microchipId`, `species`, geo-location, `areaId`, `isRegistered`, `isSterilized`. |
-| **Clinic**             | A physical veterinary location with address + lat/long. Many vets per clinic → scalable. |
-| **Vet**                | Vet profile (license, specialization, years) linked to a `User` and a `Clinic`. |
-| **Vaccination**        | Per-pet vaccine events: `vaccineName`, `doseNumber`, `status`, `administeredAt`, **`nextDueAt`** (drives reminders + subsidy planning), `isSubsidized`. |
-| **MedicalRecord**      | What a vet logs after verifying a pet by code: `diagnosis`, `treatment`, `medicine`, `diet`, `instructions`. |
-| **Reminder**           | Owner-facing notifications: `VACCINE`, `CHECKUP`, `DEWORMING`, `CARE_TIP`, `GENERAL` over `PUSH` / `SMS` / `EMAIL`. |
-| **Service**            | Catalogue of clinic services (checkup, vaccination, grooming…). |
-| **Appointment**        | Bookings linking owner ↔ pet ↔ vet ↔ service, with status workflow. |
+| **Clinic**             | A physical veterinary location with address + lat/long. Many vets per clinic → scalable.                                                                     |
+| **Vet**                | Vet profile (license, specialization, years) linked to a `User` and a `Clinic`.                                                                              |
+| **Vaccination**        | Per-pet vaccine events: `vaccineName`, `doseNumber`, `status`, `administeredAt`, **`nextDueAt`** (drives reminders + subsidy planning), `isSubsidized`.      |
+| **MedicalRecord**      | What a vet logs after verifying a pet by code: `diagnosis`, `treatment`, `medicine`, `diet`, `instructions`.                                                 |
+| **Reminder**           | Owner-facing notifications: `VACCINE`, `CHECKUP`, `DEWORMING`, `CARE_TIP`, `GENERAL` over `PUSH` / `SMS` / `EMAIL`.                                          |
+| **Service**            | Catalogue of clinic services (checkup, vaccination, grooming…).                                                                                              |
+| **Appointment**        | Bookings linking owner ↔ pet ↔ vet ↔ service, with status workflow.                                                                                          |
 
 ### How geography enables the census
 
@@ -175,13 +178,13 @@ Click **Authorize** and paste the `token` from a login/register response to try 
 
 ## Authentication
 
-| Method & path                 | Description                                   |
-| ----------------------------- | --------------------------------------------- |
-| `POST /api/v1/auth/register`  | Self sign-up (`PET_OWNER` / `VET`)            |
-| `POST /api/v1/auth/login`     | Returns `{ token, refreshToken, user }`       |
-| `POST /api/v1/auth/refresh`   | Exchange a refresh token for new tokens       |
-| `POST /api/v1/auth/logout`    | Revoke the refresh token (auth required)      |
-| `GET  /api/v1/auth/me`        | Current user (auth required)                  |
+| Method & path                | Description                              |
+| ---------------------------- | ---------------------------------------- |
+| `POST /api/v1/auth/register` | Self sign-up (`PET_OWNER` / `VET`)       |
+| `POST /api/v1/auth/login`    | Returns `{ token, refreshToken, user }`  |
+| `POST /api/v1/auth/refresh`  | Exchange a refresh token for new tokens  |
+| `POST /api/v1/auth/logout`   | Revoke the refresh token (auth required) |
+| `GET  /api/v1/auth/me`       | Current user (auth required)             |
 
 Send the access token as `Authorization: Bearer <token>` on protected routes.
 
@@ -195,32 +198,32 @@ Send the access token as `Authorization: Bearer <token>` on protected routes.
 
 ### ✅ Implemented
 
-| Resource                  | Routes                                            | Notes                                          |
-| ------------------------- | ------------------------------------------------- | ---------------------------------------------- |
-| `auth`                    | register, login, refresh, logout, me              | —                                              |
-| `users`                   | CRUD                                              | admin only                                     |
-| `pets`                    | CRUD                                              | owners scoped to their own pets; **auto-generated `code`** on create, inherits owner's area/location |
-| `pets/lookup/:code`       | `GET`                                             | **Vet-facing** — pet + owner + vaccinations + records by code. Vets/admin only |
-| `vaccinations`            | list, create, update, delete                      | vets/admin write; owners read their pets'      |
-| `records`                 | list, create, delete                              | vets/admin log diagnosis / treatment / medicine / diet |
-| `reminders`               | list, create, `PATCH /:id/read`, delete           | per-user inbox with `unread` count             |
-| `areas`                   | list, create                                      | administrative hierarchy; read: any auth, write: admin |
-| `stats/overview`          | `GET`                                             | **Government** — totals, vaccine coverage, subsidy reach, species mix. Admin only |
-| `stats/by-area`           | `GET ?level=&parentId=`                           | **Government** — pet count + coverage per area. Admin only |
-| `vets`                    | CRUD                                              | read: any auth; write: admin                   |
-| `services`                | CRUD                                              | read: any auth; write: admin                   |
-| `appointments`            | CRUD + status workflow                            | role-scoped (owner / vet / admin)              |
+| Resource            | Routes                                  | Notes                                                                                                |
+| ------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `auth`              | register, login, refresh, logout, me    | —                                                                                                    |
+| `users`             | CRUD                                    | admin only                                                                                           |
+| `pets`              | CRUD                                    | owners scoped to their own pets; **auto-generated `code`** on create, inherits owner's area/location |
+| `pets/lookup/:code` | `GET`                                   | **Vet-facing** — pet + owner + vaccinations + records by code. Vets/admin only                       |
+| `vaccinations`      | list, create, update, delete            | vets/admin write; owners read their pets'                                                            |
+| `records`           | list, create, delete                    | vets/admin log diagnosis / treatment / medicine / diet                                               |
+| `reminders`         | list, create, `PATCH /:id/read`, delete | per-user inbox with `unread` count                                                                   |
+| `areas`             | list, create                            | administrative hierarchy; read: any auth, write: admin                                               |
+| `stats/overview`    | `GET`                                   | **Government** — totals, vaccine coverage, subsidy reach, species mix. Admin only                    |
+| `stats/by-area`     | `GET ?level=&parentId=`                 | **Government** — pet count + coverage per area. Admin only                                           |
+| `vets`              | CRUD                                    | read: any auth; write: admin                                                                         |
+| `services`          | CRUD                                    | read: any auth; write: admin                                                                         |
+| `appointments`      | CRUD + status workflow                  | role-scoped (owner / vet / admin)                                                                    |
 
 All list endpoints support `?page=&limit=` and return `{ items, meta }`.
 
 ### 🛣️ Roadmap (still to build)
 
-| Planned                | What it adds                                                            |
-| ---------------------- | ---------------------------------------------------------------------- |
-| `clinics` CRUD         | Manage clinic profiles + locations; "find nearest vet".                |
-| Reminder scheduler     | Cron job reading `Vaccination.nextDueAt` → generates & dispatches reminders (SMS/push). |
-| GeoJSON feed           | `stats` endpoint returning map overlays for the government dashboard.  |
-| PostGIS upgrade        | Fast radius / nearest-vet search once data grows.                      |
+| Planned            | What it adds                                                                            |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| `clinics` CRUD     | Manage clinic profiles + locations; "find nearest vet".                                 |
+| Reminder scheduler | Cron job reading `Vaccination.nextDueAt` → generates & dispatches reminders (SMS/push). |
+| GeoJSON feed       | `stats` endpoint returning map overlays for the government dashboard.                   |
+| PostGIS upgrade    | Fast radius / nearest-vet search once data grows.                                       |
 
 ---
 
@@ -229,24 +232,24 @@ All list endpoints support `?page=&limit=` and return `{ items, meta }`.
 Success:
 
 ```json
-{ "success": true, "message": "…", "data": { } }
+{ "success": true, "message": "…", "data": {} }
 ```
 
 Error:
 
 ```json
-{ "success": false, "message": "…", "details": [ ] }
+{ "success": false, "message": "…", "details": [] }
 ```
 
 ---
 
 ## Demo credentials (after `npm run db:seed`)
 
-| Role        | Email               | Password  |
-| ----------- | ------------------- | --------- |
-| SUPER_ADMIN | admin@petcare.test  | Admin@123 |
-| PET_OWNER   | owner@petcare.test  | Owner@123 |
-| VET         | vet@petcare.test    | Vet@1234  |
+| Role        | Email           | Password  |
+| ----------- | --------------- | --------- |
+| SUPER_ADMIN | admin@gmail.com | P@ssw0rd |
+| PET_OWNER   | owner@gmail.com | P@ssw0rd|
+| VET         | vet@gmail.com   | P@ssw0rd  |
 
 Sample registered pet code: **`NP-PET-REX01`** (try the vet lookup flow against it).
 

@@ -24,6 +24,22 @@ export const authController = {
     sendSuccess(res, { message: 'Phone number saved', data });
   }),
 
+  // Forgot password — email a reset code (response is identical whether or not
+  // the address is registered).
+  forgotPassword: asyncHandler(async (req, res) => {
+    const data = await authService.forgotPassword(req.body.email);
+    sendSuccess(res, {
+      message: 'If that email is registered, a reset code is on its way',
+      data,
+    });
+  }),
+
+  // Reset password — exchange the emailed code for a new password.
+  resetPassword: asyncHandler(async (req, res) => {
+    await authService.resetPassword(req.body.email, req.body.code, req.body.password);
+    sendSuccess(res, { message: 'Password reset — you can now sign in with your new password' });
+  }),
+
   // Add a password to an account that has none yet (e.g. after Google sign-in).
   setPassword: asyncHandler(async (req, res) => {
     const data = await authService.setPassword(req.user.id, req.body.password);

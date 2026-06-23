@@ -137,6 +137,9 @@ model User {
   phoneOtp PhoneOtp?
   emailOtp EmailOtp?
 
+  // At most one pending password-reset code per user.
+  passwordResetOtp PasswordResetOtp?
+
   // Chat / messaging
   sentMessages     Message[]     @relation("SentMessages")
   receivedMessages Message[]     @relation("ReceivedMessages")
@@ -209,6 +212,22 @@ model EmailOtp {
   updatedAt  DateTime @updatedAt
 
   @@map("email_otps")
+}
+
+// A pending password-reset code, emailed to a user who forgot their password.
+// Mirrors EmailOtp; one row per user, deleted once the password is reset.
+model PasswordResetOtp {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  lastSentAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("password_reset_otps")
 }
 
 // ──────────────────────────────────────────────
