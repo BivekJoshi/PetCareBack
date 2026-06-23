@@ -39,6 +39,7 @@ export const sendDirectSchema = {
       recipientId: z.string().uuid('Invalid recipient id'),
       content: z.string().trim().max(4000).optional().default(''),
       attachment: attachmentSchema.optional(),
+      replyToId: z.string().uuid().optional(),
     })
     .refine(hasBody, { message: 'Message cannot be empty' }),
 };
@@ -48,8 +49,26 @@ export const sendBroadcastSchema = {
     .object({
       content: z.string().trim().max(4000).optional().default(''),
       attachment: attachmentSchema.optional(),
+      replyToId: z.string().uuid().optional(),
     })
     .refine(hasBody, { message: 'Message cannot be empty' }),
+};
+
+export const editMessageSchema = {
+  params: z.object({ id: z.string().uuid('Invalid message id') }),
+  body: z.object({
+    content: z.string().trim().min(1, 'Message cannot be empty').max(4000),
+  }),
+};
+
+export const deleteMessageSchema = {
+  params: z.object({ id: z.string().uuid('Invalid message id') }),
+  query: z.object({ scope: z.enum(['me', 'everyone']).default('me') }),
+};
+
+export const forwardMessageSchema = {
+  params: z.object({ id: z.string().uuid('Invalid message id') }),
+  body: z.object({ recipientId: z.string().uuid('Invalid recipient id') }),
 };
 
 export const registerDeviceSchema = {

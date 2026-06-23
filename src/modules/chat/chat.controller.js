@@ -2,7 +2,11 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { sendSuccess } from '../../utils/ApiResponse.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { chatService } from './chat.service.js';
-import { dispatchDirectMessage, dispatchBroadcast } from '../../socket/index.js';
+import {
+  dispatchDirectMessage,
+  dispatchBroadcast,
+  dispatchMessageUpdate,
+} from '../../socket/index.js';
 
 export const chatController = {
   contacts: asyncHandler(async (req, res) => {
@@ -25,7 +29,7 @@ export const chatController = {
   }),
 
   broadcast: asyncHandler(async (req, res) => {
-    const { items, meta } = await chatService.getBroadcast(req.query);
+    const { items, meta } = await chatService.getBroadcast(req.user.id, req.query);
     sendSuccess(res, { message: 'Broadcast fetched', data: { items, meta } });
   }),
 
@@ -37,9 +41,40 @@ export const chatController = {
       req.body.recipientId,
       req.body.content,
       req.body.attachment,
+      req.body.replyToId,
     );
     dispatchDirectMessage(message);
     sendSuccess(res, { statusCode: 201, message: 'Message sent', data: message });
+  }),
+
+  editMessage: asyncHandler(async (req, res) => {
+    const message = await chatService.editMessage(
+      req.user.id,
+      req.params.id,
+      req.body.content,
+    );
+    dispatchMessageUpdate(message);
+    sendSuccess(res, { message: 'Message updated', data: message });
+  }),
+
+  deleteMessage: asyncHandler(async (req, res) => {
+    if (req.query.scope === 'everyone') {
+      const message = await chatService.deleteForEveryone(req.user.id, req.params.id);
+      dispatchMessageUpdate(message);
+      return sendSuccess(res, { message: 'Message deleted for everyone', data: message });
+    }
+    await chatService.deleteForMe(req.user.id, req.params.id);
+    return sendSuccess(res, { message: 'Message deleted for you' });
+  }),
+
+  forwardMessage: asyncHandler(async (req, res) => {
+    const message = await chatService.forwardMessage(
+      req.user.id,
+      req.params.id,
+      req.body.recipientId,
+    );
+    dispatchDirectMessage(message);
+    sendSuccess(res, { statusCode: 201, message: 'Message forwarded', data: message });
   }),
 
   sendBroadcast: asyncHandler(async (req, res) => {

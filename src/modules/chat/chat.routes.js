@@ -11,6 +11,9 @@ import {
   broadcastListSchema,
   sendDirectSchema,
   sendBroadcastSchema,
+  editMessageSchema,
+  deleteMessageSchema,
+  forwardMessageSchema,
   registerDeviceSchema,
   removeDeviceSchema,
 } from './chat.validation.js';
@@ -29,6 +32,15 @@ router.get('/unread', chatController.unread);
 router.get('/messages/:userId', validate(threadSchema), chatController.thread);
 router.post('/messages', validate(sendDirectSchema), chatController.sendDirect);
 router.post('/messages/:userId/read', validate(markReadSchema), chatController.markRead);
+
+// Edit / delete / forward a single message (by message id).
+router.patch('/message/:id', validate(editMessageSchema), chatController.editMessage);
+router.delete('/message/:id', validate(deleteMessageSchema), chatController.deleteMessage);
+router.post(
+  '/message/:id/forward',
+  validate(forwardMessageSchema),
+  chatController.forwardMessage,
+);
 
 // Broadcast channel — anyone can read, only admins can post.
 router.get('/broadcast', validate(broadcastListSchema), chatController.broadcast);

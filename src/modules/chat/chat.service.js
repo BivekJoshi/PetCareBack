@@ -10,6 +10,17 @@ const userMini = {
   role: true,
 };
 
+// Trimmed projection of the message a reply points at (for the quoted preview).
+const replyPreviewSelect = {
+  id: true,
+  content: true,
+  attachmentName: true,
+  attachmentType: true,
+  deletedAt: true,
+  senderId: true,
+  sender: { select: { id: true, firstName: true, lastName: true } },
+};
+
 const messageSelect = {
   id: true,
   type: true,
@@ -21,9 +32,17 @@ const messageSelect = {
   senderId: true,
   recipientId: true,
   readAt: true,
+  editedAt: true,
+  deletedAt: true,
+  isForwarded: true,
+  replyToId: true,
+  replyTo: { select: replyPreviewSelect },
   createdAt: true,
   sender: { select: userMini },
 };
+
+// Exclude messages the user "deleted for me".
+const notHiddenBy = (userId) => ({ hides: { none: { userId } } });
 
 // Pull only the attachment columns from a validated attachment payload.
 const attachmentData = (attachment) =>
@@ -79,6 +98,7 @@ export const chatService = {
       where: {
         type: 'DIRECT',
         OR: [{ senderId: userId }, { recipientId: userId }],
+        ...notHiddenBy(userId),
       },
       select: messageSelect,
       orderBy: { createdAt: 'desc' },
@@ -126,6 +146,7 @@ export const chatService = {
         { senderId: userId, recipientId: otherId },
         { senderId: otherId, recipientId: userId },
       ],
+      ...notHiddenBy(userId),
     };
 
     const [rows, total] = await Promise.all([
@@ -146,8 +167,8 @@ export const chatService = {
   },
 
   /** The single broadcast channel everyone shares (oldest→newest). */
-  async getBroadcast({ page, limit }) {
-    const where = { type: 'BROADCAST' };
+  async getBroadcast(userId, { page, limit }) {
+    const where = { type: 'BROADCAST', ...notHiddenBy(userId) };
     const [rows, total] = await Promise.all([
       prisma.message.findMany({
         where,
@@ -165,8 +186,23 @@ export const chatService = {
     };
   },
 
+  // Validate that a replied-to message exists and belongs to this thread.
+  async resolveReply(replyToId, { senderId, recipientId, type }) {
+    if (!replyToId) return null;
+    const target = await prisma.message.findUnique({
+      where: { id: replyToId },
+      select: { id: true, type: true, senderId: true, recipientId: true },
+    });
+    if (!target || target.type !== type) return null;
+    if (type === 'DIRECT') {
+      const pair = new Set([senderId, recipientId]);
+      if (!pair.has(target.senderId) || !pair.has(target.recipientId)) return null;
+    }
+    return target.id;
+  },
+
   /** Persist a one-to-one message. Returns it with the sender populated. */
-  async createDirect(senderId, recipientId, content, attachment = null) {
+  async createDirect(senderId, recipientId, content, attachment = null, replyToId = null) {
     if (senderId === recipientId) {
       throw ApiError.badRequest('You cannot message yourself');
     }
@@ -178,12 +214,19 @@ export const chatService = {
       throw ApiError.notFound('Recipient not found');
     }
 
+    const validReplyId = await this.resolveReply(replyToId, {
+      senderId,
+      recipientId,
+      type: 'DIRECT',
+    });
+
     return prisma.message.create({
       data: {
         type: 'DIRECT',
         content: content || '',
         senderId,
         recipientId,
+        replyToId: validReplyId,
         ...attachmentData(attachment),
       },
       select: messageSelect,
@@ -191,14 +234,118 @@ export const chatService = {
   },
 
   /** Persist a broadcast (announcement) message. */
-  async createBroadcast(senderId, content, attachment = null) {
+  async createBroadcast(senderId, content, attachment = null, replyToId = null) {
+    const validReplyId = await this.resolveReply(replyToId, {
+      senderId,
+      type: 'BROADCAST',
+    });
+
     return prisma.message.create({
       data: {
         type: 'BROADCAST',
         content: content || '',
         senderId,
         recipientId: null,
+        replyToId: validReplyId,
         ...attachmentData(attachment),
+      },
+      select: messageSelect,
+    });
+  },
+
+  /** Edit a message's text. Only the author may edit; tombstones can't be edited. */
+  async editMessage(userId, messageId, content) {
+    const msg = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, senderId: true, deletedAt: true },
+    });
+    if (!msg) throw ApiError.notFound('Message not found');
+    if (msg.senderId !== userId) throw ApiError.forbidden('You can only edit your own messages');
+    if (msg.deletedAt) throw ApiError.badRequest('Cannot edit a deleted message');
+
+    return prisma.message.update({
+      where: { id: messageId },
+      data: { content, editedAt: new Date() },
+      select: messageSelect,
+    });
+  },
+
+  /**
+   * "Delete for everyone" — only the author can. Replaces the message with a
+   * tombstone (clears text + attachment) so both sides see "message deleted".
+   */
+  async deleteForEveryone(userId, messageId) {
+    const msg = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, senderId: true },
+    });
+    if (!msg) throw ApiError.notFound('Message not found');
+    if (msg.senderId !== userId) {
+      throw ApiError.forbidden('You can only delete your own messages for everyone');
+    }
+
+    return prisma.message.update({
+      where: { id: messageId },
+      data: {
+        deletedAt: new Date(),
+        content: '',
+        attachmentUrl: null,
+        attachmentName: null,
+        attachmentType: null,
+        attachmentSize: null,
+      },
+      select: messageSelect,
+    });
+  },
+
+  /** "Delete for me" — hides the message from this user only. */
+  async deleteForMe(userId, messageId) {
+    const msg = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true },
+    });
+    if (!msg) throw ApiError.notFound('Message not found');
+
+    await prisma.messageHide.upsert({
+      where: { messageId_userId: { messageId, userId } },
+      create: { messageId, userId },
+      update: {},
+    });
+  },
+
+  /** Forward an existing message's content/attachment to another user. */
+  async forwardMessage(userId, sourceId, recipientId) {
+    const source = await prisma.message.findUnique({
+      where: { id: sourceId },
+      select: {
+        content: true,
+        deletedAt: true,
+        attachmentUrl: true,
+        attachmentName: true,
+        attachmentType: true,
+        attachmentSize: true,
+      },
+    });
+    if (!source) throw ApiError.notFound('Original message not found');
+    if (source.deletedAt) throw ApiError.badRequest('Cannot forward a deleted message');
+
+    const recipient = await prisma.user.findUnique({
+      where: { id: recipientId },
+      select: { id: true, isActive: true },
+    });
+    if (!recipient || !recipient.isActive) throw ApiError.notFound('Recipient not found');
+
+    return prisma.message.create({
+      data: {
+        type: 'DIRECT',
+        content: source.content || '',
+        senderId: userId,
+        recipientId,
+        isForwarded: true,
+        attachmentUrl: source.attachmentUrl,
+        attachmentName: source.attachmentName,
+        attachmentType: source.attachmentType,
+        attachmentSize: source.attachmentSize,
       },
       select: messageSelect,
     });

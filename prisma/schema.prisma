@@ -129,6 +129,7 @@ model User {
   // Chat / messaging
   sentMessages     Message[]     @relation("SentMessages")
   receivedMessages Message[]     @relation("ReceivedMessages")
+  hiddenMessages   MessageHide[]
   deviceTokens     DeviceToken[]
 
   @@index([role])
@@ -404,6 +405,20 @@ model Message {
   attachmentType String? // MIME type, e.g. "image/png", "application/pdf"
   attachmentSize Int? // bytes
 
+  // Lifecycle: edited / "deleted for everyone" (tombstone) / forwarded.
+  editedAt    DateTime?
+  deletedAt   DateTime?
+  isForwarded Boolean   @default(false)
+
+  // Reply threading — points at the message this one replies to.
+  replyToId String?
+  replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("MessageReplies")
+
+  // Per-user "delete for me" rows; a message hidden here is filtered out for
+  // that user only.
+  hides MessageHide[]
+
   senderId String
   sender   User   @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
@@ -420,6 +435,24 @@ model Message {
   // Fast lookup of a direct thread between two users, newest first.
   @@index([senderId, recipientId, createdAt])
   @@map("messages")
+}
+
+// "Delete for me": hides a single message from one user without affecting the
+// other participant's copy.
+model MessageHide {
+  id String @id @default(uuid())
+
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId])
+  @@index([userId])
+  @@map("message_hides")
 }
 
 // Push-notification registration (e.g. Firebase Cloud Messaging) per device.

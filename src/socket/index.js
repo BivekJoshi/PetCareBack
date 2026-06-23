@@ -105,6 +105,19 @@ export const dispatchBroadcast = (message) => {
   });
 };
 
+/**
+ * Notify participants that a message changed (edited or deleted-for-everyone).
+ * The full updated message is sent so clients can replace it in place.
+ */
+export const dispatchMessageUpdate = (message) => {
+  if (message.type === 'BROADCAST') {
+    if (io) io.to(BROADCAST_ROOM).emit('message:updated', message);
+  } else {
+    emitToUser(message.recipientId, 'message:updated', message);
+    emitToUser(message.senderId, 'message:updated', message);
+  }
+};
+
 // ── Socket auth — verify the JWT supplied in the handshake ──
 const authenticateSocket = async (socket, next) => {
   try {
@@ -136,21 +149,30 @@ const safeAck = (ack, payload) => {
 const registerHandlers = (socket) => {
   const me = socket.user;
 
-  socket.on('message:send', async ({ recipientId, content, attachment } = {}, ack) => {
-    try {
-      const text = String(content || '').trim();
-      if (!recipientId || (!text && !attachment)) {
-        return safeAck(ack, { ok: false, error: 'recipientId and a message or file are required' });
+  socket.on(
+    'message:send',
+    async ({ recipientId, content, attachment, replyToId } = {}, ack) => {
+      try {
+        const text = String(content || '').trim();
+        if (!recipientId || (!text && !attachment)) {
+          return safeAck(ack, { ok: false, error: 'recipientId and a message or file are required' });
+        }
+        const message = await chatService.createDirect(
+          me.id,
+          recipientId,
+          text,
+          attachment,
+          replyToId,
+        );
+        dispatchDirectMessage(message);
+        return safeAck(ack, { ok: true, message });
+      } catch (err) {
+        return safeAck(ack, { ok: false, error: err.message || 'Failed to send message' });
       }
-      const message = await chatService.createDirect(me.id, recipientId, text, attachment);
-      dispatchDirectMessage(message);
-      safeAck(ack, { ok: true, message });
-    } catch (err) {
-      safeAck(ack, { ok: false, error: err.message || 'Failed to send message' });
-    }
-  });
+    },
+  );
 
-  socket.on('broadcast:send', async ({ content, attachment } = {}, ack) => {
+  socket.on('broadcast:send', async ({ content, attachment, replyToId } = {}, ack) => {
     try {
       if (!['ADMIN', 'SUPER_ADMIN'].includes(me.role)) {
         return safeAck(ack, { ok: false, error: 'Only admins can broadcast' });
@@ -160,11 +182,11 @@ const registerHandlers = (socket) => {
         return safeAck(ack, { ok: false, error: 'A message or file is required' });
       }
 
-      const message = await chatService.createBroadcast(me.id, text, attachment);
+      const message = await chatService.createBroadcast(me.id, text, attachment, replyToId);
       dispatchBroadcast(message);
-      safeAck(ack, { ok: true, message });
+      return safeAck(ack, { ok: true, message });
     } catch (err) {
-      safeAck(ack, { ok: false, error: err.message || 'Failed to broadcast' });
+      return safeAck(ack, { ok: false, error: err.message || 'Failed to broadcast' });
     }
   });
 
