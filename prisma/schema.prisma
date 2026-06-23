@@ -404,6 +404,7 @@ enum MessageType {
   DIRECT // one-to-one between two users
   BROADCAST // announcement sent to every user (recipientId is null)
   GROUP // sent to a group (groupId set, recipientId null)
+  CALL // a call-log entry shown inline in a direct thread
 }
 
 enum CallType {
@@ -435,6 +436,12 @@ model Message {
   editedAt    DateTime?
   deletedAt   DateTime?
   isForwarded Boolean   @default(false)
+
+  // Populated only for CALL messages — mirrors the related Call's outcome so the
+  // thread can render a call-log row without a join.
+  callType        CallType?
+  callStatus      CallStatus?
+  callDurationSec Int?
 
   // Reply threading — points at the message this one replies to.
   replyToId String?

@@ -36,6 +36,9 @@ export const messageSelect = {
   editedAt: true,
   deletedAt: true,
   isForwarded: true,
+  callType: true,
+  callStatus: true,
+  callDurationSec: true,
   replyToId: true,
   replyTo: { select: replyPreviewSelect },
   createdAt: true,
@@ -130,10 +133,11 @@ export const chatService = {
     });
     const unreadBy = new Map(unreadGroups.map((g) => [g.senderId, g._count._all]));
 
-    // Recent direct messages involving the user; reduce to latest-per-partner.
+    // Recent direct messages (and call logs) involving the user; reduce to
+    // latest-per-partner.
     const recent = await prisma.message.findMany({
       where: {
-        type: 'DIRECT',
+        type: { in: ['DIRECT', 'CALL'] },
         OR: [{ senderId: userId }, { recipientId: userId }],
         ...notHiddenBy(userId),
       },
@@ -181,7 +185,7 @@ export const chatService = {
     }
 
     const where = {
-      type: 'DIRECT',
+      type: { in: ['DIRECT', 'CALL'] },
       OR: [
         { senderId: userId, recipientId: otherId },
         { senderId: otherId, recipientId: userId },
@@ -268,6 +272,26 @@ export const chatService = {
         recipientId,
         replyToId: validReplyId,
         ...attachmentData(attachment),
+      },
+      select: messageSelect,
+    });
+  },
+
+  /**
+   * Persist a CALL log entry as a message in the two participants' direct
+   * thread. `sender` is the caller and `recipient` the callee, so the client
+   * can derive call direction the same way it does for messages.
+   */
+  async createCallMessage({ callerId, calleeId, type, status, durationSec }) {
+    return prisma.message.create({
+      data: {
+        type: 'CALL',
+        content: '',
+        senderId: callerId,
+        recipientId: calleeId,
+        callType: type, // AUDIO | VIDEO
+        callStatus: status, // COMPLETED | DECLINED | CANCELLED | MISSED
+        callDurationSec: durationSec ?? 0,
       },
       select: messageSelect,
     });

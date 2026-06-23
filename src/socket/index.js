@@ -155,6 +155,22 @@ export const dispatchGroupUpdate = (memberIds, groupId) => {
   memberIds.forEach((id) => emitToUser(id, 'group:updated', { groupId }));
 };
 
+/**
+ * Persist a finished call as an inline message in the two parties' thread and
+ * push it to both in real time. `summary` comes from callService.complete /
+ * terminal and is null when the call had already ended (so we never duplicate).
+ */
+const logCallMessage = async (summary) => {
+  if (!summary) return;
+  try {
+    const message = await chatService.createCallMessage(summary);
+    emitToUser(summary.callerId, 'message:new', message);
+    emitToUser(summary.calleeId, 'message:new', message);
+  } catch (err) {
+    logger.error('Failed to log call message', err);
+  }
+};
+
 // ── Socket auth — verify the JWT supplied in the handshake ──
 const authenticateSocket = async (socket, next) => {
   try {
@@ -185,6 +201,12 @@ const safeAck = (ack, payload) => {
 
 const registerHandlers = (socket) => {
   const me = socket.user;
+
+  // Let a client re-sync the online roster on demand (e.g. after a reconnect or
+  // when it (re)subscribes after the one-time connect emit already fired).
+  socket.on('presence:get', () => {
+    socket.emit('presence:list', { online: getOnlineUserIds() });
+  });
 
   socket.on(
     'message:send',
@@ -305,12 +327,12 @@ const registerHandlers = (socket) => {
 
   socket.on('call:reject', ({ callId, toUserId } = {}) => {
     if (toUserId) emitToUser(toUserId, 'call:rejected', { callId, by: me.id });
-    callService.terminal(callId, 'DECLINED').catch(() => {});
+    callService.terminal(callId, 'DECLINED').then(logCallMessage).catch(() => {});
   });
 
   socket.on('call:cancel', ({ callId, toUserId } = {}) => {
     if (toUserId) emitToUser(toUserId, 'call:cancelled', { callId, by: me.id });
-    callService.terminal(callId, 'CANCELLED').catch(() => {});
+    callService.terminal(callId, 'CANCELLED').then(logCallMessage).catch(() => {});
   });
 
   socket.on('call:end', ({ callId, toUserId } = {}) => {
@@ -319,7 +341,7 @@ const registerHandlers = (socket) => {
       calls.delete(toUserId);
       emitToUser(toUserId, 'call:ended', { callId, by: me.id });
     }
-    callService.complete(callId).catch(() => {});
+    callService.complete(callId).then(logCallMessage).catch(() => {});
   });
 
   // SDP offer/answer + ICE candidate relays — passed straight through.
@@ -375,7 +397,7 @@ export const initSocket = (httpServer) => {
             callId: active.callId,
             by: me.id,
           });
-          callService.complete(active.callId).catch(() => {});
+          callService.complete(active.callId).then(logCallMessage).catch(() => {});
         }
 
         logger.info(`Socket disconnected: ${fullName(me)} (${me.id})`);
