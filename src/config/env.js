@@ -57,6 +57,13 @@ export const env = {
     resendCooldownSec: Number(process.env.OTP_RESEND_COOLDOWN_SEC || 30),
   },
 
+  // Google OAuth (Sign in with Google). The frontend obtains an access token via
+  // Google Identity Services; the server validates it was issued for THIS client
+  // before trusting the profile. Leave blank to disable Google sign-in entirely.
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+  },
+
   // Email (SMTP, e.g. Mailtrap) for sending the email OTP. Optional — when
   // unconfigured the code is logged to the console and surfaced in dev so the
   // flow is testable without a mailbox.
@@ -85,6 +92,9 @@ export const isWhatsAppConfigured = Boolean(
 
 // True when SMTP credentials for sending email are present.
 export const isMailConfigured = Boolean(env.mail.host && env.mail.user && env.mail.pass);
+
+// True when a Google OAuth client ID is configured (enables Sign in with Google).
+export const isGoogleConfigured = Boolean(env.google.clientId);
 
 // In dev, the API echoes a channel's OTP back so the client can show it for
 // testing — only when that channel has no real sender configured and not in prod.

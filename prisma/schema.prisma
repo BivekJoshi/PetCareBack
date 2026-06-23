@@ -103,12 +103,17 @@ enum ReminderStatus {
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
-  password     String
+  // Optional: OAuth-only accounts (e.g. Google sign-in) have no password.
+  password     String?
   firstName    String
   lastName     String
   phone         String?
   phoneVerified Boolean @default(false) // WhatsApp OTP confirmed the number
   emailVerified Boolean @default(false) // email OTP confirmed the address
+  // Google OAuth — set once an account is linked to a Google identity (the
+  // Google "sub"). Lets returning users sign in with Google.
+  googleId      String? @unique
+  avatarUrl     String? // profile picture (e.g. from Google)
   role          Role    @default(PET_OWNER)
   isActive      Boolean @default(true)
   refreshToken  String?

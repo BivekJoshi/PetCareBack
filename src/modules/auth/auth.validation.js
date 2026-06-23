@@ -24,6 +24,18 @@ export const verifyOtpSchema = {
   }),
 };
 
+export const googleAuthSchema = {
+  body: z.object({
+    accessToken: z.string().min(1, 'A Google access token is required'),
+  }),
+};
+
+export const setPhoneSchema = {
+  body: z.object({
+    phone: phoneField,
+  }),
+};
+
 export const loginSchema = {
   body: z.object({
     email: z.string().email('A valid email is required'),

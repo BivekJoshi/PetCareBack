@@ -13,6 +13,17 @@ export const authController = {
     sendSuccess(res, { message: 'Login successful', data });
   }),
 
+  google: asyncHandler(async (req, res) => {
+    const data = await authService.googleAuth(req.body.accessToken);
+    sendSuccess(res, { message: 'Signed in with Google', data });
+  }),
+
+  // Attach a phone number after Google sign-in (when none is on file yet).
+  setPhone: asyncHandler(async (req, res) => {
+    const data = await authService.setPhone(req.user.id, req.body.phone);
+    sendSuccess(res, { message: 'Phone number saved', data });
+  }),
+
   refresh: asyncHandler(async (req, res) => {
     const data = await authService.refresh(req.body.refreshToken);
     sendSuccess(res, { message: 'Token refreshed', data });

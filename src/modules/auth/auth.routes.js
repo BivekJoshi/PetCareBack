@@ -8,15 +8,21 @@ import {
   loginSchema,
   refreshSchema,
   verifyOtpSchema,
+  googleAuthSchema,
+  setPhoneSchema,
 } from './auth.validation.js';
 
 const router = Router();
 
 router.post('/register', authLimiter, validate(registerSchema), authController.register);
 router.post('/login', authLimiter, validate(loginSchema), authController.login);
+router.post('/google', authLimiter, validate(googleAuthSchema), authController.google);
 router.post('/refresh', validate(refreshSchema), authController.refresh);
 router.post('/logout', authenticate, authController.logout);
 router.get('/me', authenticate, authController.me);
+
+// Attach a phone number to the signed-in account (post Google sign-in).
+router.post('/phone', authenticate, authLimiter, validate(setPhoneSchema), authController.setPhone);
 
 // Public auth config (e.g. whether phone OTP is required) — no auth needed.
 router.get('/config', authController.config);

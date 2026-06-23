@@ -10,6 +10,7 @@ import {
 import { env, exposeDevOtp } from '../../config/env.js';
 import { sendWhatsAppOtp } from '../../services/whatsapp.service.js';
 import { sendOtpEmail } from '../../services/mail.service.js';
+import { verifyGoogleAccessToken } from '../../services/google.service.js';
 import { settingsService } from '../admin/settings.service.js';
 
 // Fields safe to return to the client.
@@ -21,6 +22,7 @@ const publicUser = {
   phone: true,
   phoneVerified: true,
   emailVerified: true,
+  avatarUrl: true,
   role: true,
   isActive: true,
   createdAt: true,
@@ -209,6 +211,8 @@ export const authService = {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) throw ApiError.unauthorized('Invalid email or password');
     if (!user.isActive) throw ApiError.forbidden('Your account has been deactivated');
+    // OAuth-only accounts have no password — steer them to their provider.
+    if (!user.password) throw ApiError.unauthorized('Use "Sign in with Google" for this account');
 
     const ok = await comparePassword(password, user.password);
     if (!ok) throw ApiError.unauthorized('Invalid email or password');
@@ -221,6 +225,80 @@ export const authService = {
 
     const { password: _pw, refreshToken: _rt, ...safe } = user;
     return authPayload(safe, tokens);
+  },
+
+  /**
+   * Sign in (or sign up) with Google. Validates the client-obtained access token
+   * with Google, then resolves the account: an existing Google-linked user, or
+   * an existing email match (which gets linked to Google), or a brand-new
+   * account. OAuth accounts have no password and may have no phone yet — the
+   * response's `needsPhone` flag tells the client to collect one afterwards.
+   */
+  async googleAuth(accessToken) {
+    const profile = await verifyGoogleAccessToken(accessToken);
+
+    // Prefer an existing Google link; fall back to matching the verified email.
+    let user = await prisma.user.findUnique({ where: { googleId: profile.googleId } });
+    if (!user) user = await prisma.user.findUnique({ where: { email: profile.email } });
+
+    if (user) {
+      if (!user.isActive) throw ApiError.forbidden('Your account has been deactivated');
+      // Backfill the Google link / verified-email / avatar on first connect.
+      const patch = {};
+      if (!user.googleId) patch.googleId = profile.googleId;
+      if (profile.emailVerified && !user.emailVerified) patch.emailVerified = true;
+      if (profile.avatarUrl && !user.avatarUrl) patch.avatarUrl = profile.avatarUrl;
+      if (Object.keys(patch).length) {
+        user = await prisma.user.update({ where: { id: user.id }, data: patch });
+      }
+    } else {
+      user = await prisma.user.create({
+        data: {
+          email: profile.email,
+          firstName: profile.firstName || 'Pet',
+          lastName: profile.lastName || 'Owner',
+          googleId: profile.googleId,
+          avatarUrl: profile.avatarUrl,
+          emailVerified: profile.emailVerified,
+          role: 'PET_OWNER',
+        },
+      });
+    }
+
+    const tokens = buildTokens(user);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { refreshToken: tokens.refreshToken },
+    });
+
+    const safe = await prisma.user.findUnique({ where: { id: user.id }, select: publicUser });
+    // No phone on file yet → the client should ask for one after sign-in.
+    return { ...authPayload(safe, tokens), needsPhone: !safe.phone };
+  },
+
+  /**
+   * Attach (or change) a user's phone number — used right after Google sign-in
+   * when no phone is on file. Resets phone verification and, when WhatsApp OTP is
+   * enabled, immediately sends a code so the client can verify it.
+   */
+  async setPhone(userId, phone) {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { phone, phoneVerified: false },
+      select: publicUser,
+    });
+
+    const enabled = await settingsService.isOtpEnabled();
+    let phoneVerification = { required: Boolean(enabled), sent: false };
+    if (enabled) {
+      try {
+        phoneVerification = { required: true, ...(await this.issueOtp('phone', userId)) };
+      } catch (err) {
+        phoneVerification = { required: true, sent: false, error: err.message };
+      }
+    }
+
+    return { user, verification: { phone: phoneVerification } };
   },
 
   async refresh(refreshToken) {
