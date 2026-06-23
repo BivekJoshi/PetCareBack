@@ -140,6 +140,9 @@ model User {
   groupsCreated     Group[]       @relation("GroupsCreated")
   groupMemberships  GroupMember[] @relation("GroupMemberships")
 
+  // Admin who last changed the chat-retention policy.
+  retentionSettings MessageRetentionSetting[] @relation("RetentionUpdatedBy")
+
   @@index([role])
   @@index([areaId])
   @@map("users")
@@ -574,4 +577,35 @@ model GroupMember {
   @@unique([groupId, userId])
   @@index([userId])
   @@map("group_members")
+}
+
+// ──────────────────────────────────────────────
+// Admin control panel — chat retention policy
+// ──────────────────────────────────────────────
+
+// Singleton row (id is pinned to 1) holding the dynamic chat-retention policy.
+// A scheduled purge job permanently deletes messages older than `retentionDays`
+// straight from the database, keeping storage (and cost) bounded. Admins tune
+// the window — or pause it entirely — from the dashboard control panel.
+model MessageRetentionSetting {
+  id Int @id @default(1) // always 1 — there is only ever one policy row
+
+  // How many days a message is kept before it is permanently deleted.
+  retentionDays Int @default(50)
+
+  // Master switch — when false the purge job is skipped and nothing is deleted.
+  enabled Boolean @default(true)
+
+  // Audit of the most recent automatic/manual purge.
+  lastPurgeAt    DateTime?
+  lastPurgeCount Int       @default(0)
+
+  // Which admin last changed the policy.
+  updatedById String?
+  updatedBy   User?   @relation("RetentionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("message_retention_settings")
 }
