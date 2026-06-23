@@ -20,6 +20,10 @@ export const env = {
     .map((o) => o.trim())
     .filter(Boolean),
 
+  // Where the frontend is served. Email templates (their HTML "UI") live there as
+  // static files under /email-templates; the backend fetches and fills them.
+  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, ''),
+
   databaseUrl: required('DATABASE_URL'),
 
   jwt: {

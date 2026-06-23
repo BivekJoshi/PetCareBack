@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { EMAIL_TEMPLATE_DEFAULTS } from '../src/templates/emailDefaults.js';
 
 const prisma = new PrismaClient();
 
@@ -173,10 +174,19 @@ async function main() {
     });
   }
 
+  // ── Editable email templates (admin Control Panel) ──
+  for (const def of Object.values(EMAIL_TEMPLATE_DEFAULTS)) {
+    await prisma.emailTemplate.upsert({
+      where: { key: def.key },
+      update: {}, // don't clobber admin edits on re-seed
+      create: { key: def.key, name: def.name, subject: def.subject, html: def.html },
+    });
+  }
+
   console.log('Seed complete.');
-  console.log('  Super admin : admin@petcare.test / Admin@123');
-  console.log('  Pet owner   : owner@petcare.test / Owner@123');
-  console.log('  Vet         : vet@petcare.test   / Vet@1234');
+  console.log('  Super admin : admin@gmail.com / P@ssw0rd');
+  console.log('  Pet owner   : owner@gmail.com / P@ssw0rd');
+  console.log('  Vet         : vet@gmail.com   / P@ssw0rd');
   console.log('  Sample pet code : NP-PET-REX01');
   void superAdmin;
 }

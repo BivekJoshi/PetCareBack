@@ -1,8 +1,7 @@
 import nodemailer from 'nodemailer';
 import { env, isMailConfigured } from '../config/env.js';
 import { logger } from '../utils/logger.js';
-import { otpEmail } from '../templates/otpEmail.js';
-import { passwordResetEmail } from '../templates/passwordResetEmail.js';
+import { renderEmailTemplate } from '../modules/emailTemplates/emailTemplate.service.js';
 
 // Lazily-created transport so the server boots fine when mail is unconfigured.
 let transport = null;
@@ -25,11 +24,7 @@ const getTransport = () => {
  * the mail server.
  */
 export const sendOtpEmail = async (to, code, { firstName } = {}) => {
-  const { subject, html, text } = otpEmail({
-    code,
-    firstName,
-    ttlMinutes: env.whatsapp.otpTtlMinutes,
-  });
+  const { subject, html, text } = await renderEmailTemplate('otp', { code, firstName });
 
   const tx = getTransport();
   if (!tx) {
@@ -47,11 +42,7 @@ export const sendOtpEmail = async (to, code, { firstName } = {}) => {
  * code in dev when SMTP isn't configured. Returns true when handed to the server.
  */
 export const sendPasswordResetEmail = async (to, code, { firstName } = {}) => {
-  const { subject, html, text } = passwordResetEmail({
-    code,
-    firstName,
-    ttlMinutes: env.whatsapp.otpTtlMinutes,
-  });
+  const { subject, html, text } = await renderEmailTemplate('password-reset', { code, firstName });
 
   const tx = getTransport();
   if (!tx) {

@@ -160,6 +160,9 @@ model User {
   // Super admin who last changed auth settings (OTP toggle).
   authSettings AuthSetting[] @relation("AuthSettingUpdatedBy")
 
+  // Super admin who last edited an email template.
+  emailTemplates EmailTemplate[] @relation("EmailTemplateUpdatedBy")
+
   @@index([role])
   @@index([areaId])
   @@map("users")
@@ -180,6 +183,26 @@ model AuthSetting {
   updatedAt DateTime @updatedAt
 
   @@map("auth_settings")
+}
+
+// Editable transactional-email templates, managed from the admin Control Panel.
+// One row per template `key` (e.g. "otp", "password-reset"). The HTML is the
+// email's visual "UI" with {{token}} placeholders the mailer fills per send;
+// when a row is absent the bundled default (templates/emailDefaults.js) is used.
+model EmailTemplate {
+  id      String @id @default(uuid())
+  key     String @unique // 'otp' | 'password-reset'
+  name    String // human label shown in the editor
+  subject String // may contain {{code}} etc.
+  html    String @db.Text // full HTML document with {{tokens}}
+
+  updatedById String?
+  updatedBy   User?   @relation("EmailTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_templates")
 }
 
 // A pending WhatsApp OTP for verifying a user's phone number. One row per user

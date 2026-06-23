@@ -12,6 +12,7 @@ import areaRoutes from '../modules/areas/area.routes.js';
 import statsRoutes from '../modules/stats/stats.routes.js';
 import chatRoutes from '../modules/chat/chat.routes.js';
 import adminRoutes from '../modules/admin/admin.routes.js';
+import emailTemplateRoutes from '../modules/emailTemplates/emailTemplate.routes.js';
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use('/areas', areaRoutes);
 router.use('/stats', statsRoutes);
 router.use('/chat', chatRoutes);
 router.use('/admin', adminRoutes);
+router.use('/email-templates', emailTemplateRoutes);
 
 export default router;
