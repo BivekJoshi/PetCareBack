@@ -106,10 +106,11 @@ model User {
   password     String
   firstName    String
   lastName     String
-  phone        String?
-  role         Role    @default(PET_OWNER)
-  isActive     Boolean @default(true)
-  refreshToken String?
+  phone         String?
+  phoneVerified Boolean @default(false) // WhatsApp OTP confirmed the number
+  role          Role    @default(PET_OWNER)
+  isActive      Boolean @default(true)
+  refreshToken  String?
 
   // Where the owner lives — used to seed a pet's location and for census rollups.
   areaId    String?
@@ -125,6 +126,9 @@ model User {
   appointments Appointment[]       @relation("OwnerAppointments")
   reminders    Reminder[]
   area         AdministrativeArea? @relation(fields: [areaId], references: [id], onDelete: SetNull)
+
+  // Phone (WhatsApp) verification — at most one pending OTP per user.
+  phoneOtp PhoneOtp?
 
   // Chat / messaging
   sentMessages     Message[]     @relation("SentMessages")
@@ -143,9 +147,44 @@ model User {
   // Admin who last changed the chat-retention policy.
   retentionSettings MessageRetentionSetting[] @relation("RetentionUpdatedBy")
 
+  // Super admin who last changed auth settings (OTP toggle).
+  authSettings AuthSetting[] @relation("AuthSettingUpdatedBy")
+
   @@index([role])
   @@index([areaId])
   @@map("users")
+}
+
+// Singleton (id pinned to 1) holding auth-related toggles a super admin
+// controls. Currently a master switch for WhatsApp phone-OTP at signup — when
+// off, registration skips verification entirely (no OTP is sent or required).
+model AuthSetting {
+  id         Int     @id @default(1)
+  otpEnabled Boolean @default(true)
+
+  updatedById String?
+  updatedBy   User?   @relation("AuthSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auth_settings")
+}
+
+// A pending WhatsApp OTP for verifying a user's phone number. One row per user
+// (upserted on each send); deleted once the phone is verified.
+model PhoneOtp {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String // bcrypt hash of the 6-digit code (never stored in clear)
+  expiresAt  DateTime
+  attempts   Int      @default(0) // failed verify attempts, capped to deter brute force
+  lastSentAt DateTime @default(now()) // for resend cooldown
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("phone_otps")
 }
 
 // ──────────────────────────────────────────────

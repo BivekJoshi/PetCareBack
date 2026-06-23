@@ -27,4 +27,19 @@ export const authController = {
     const data = await authService.me(req.user.id);
     sendSuccess(res, { message: 'Current user', data });
   }),
+
+  config: asyncHandler(async (_req, res) => {
+    const data = await authService.publicConfig();
+    sendSuccess(res, { message: 'Auth config', data });
+  }),
+
+  sendOtp: asyncHandler(async (req, res) => {
+    const data = await authService.issuePhoneOtp(req.user.id);
+    sendSuccess(res, { message: 'Verification code sent via WhatsApp', data });
+  }),
+
+  verifyOtp: asyncHandler(async (req, res) => {
+    const user = await authService.verifyPhoneOtp(req.user.id, req.body.code);
+    sendSuccess(res, { message: 'Phone number verified', data: { user } });
+  }),
 };

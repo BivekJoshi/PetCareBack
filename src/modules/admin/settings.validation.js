@@ -11,3 +11,9 @@ export const updateRetentionSchema = {
       message: 'Provide retentionDays and/or enabled',
     }),
 };
+
+export const updateAuthSettingsSchema = {
+  body: z.object({
+    otpEnabled: z.boolean({ required_error: 'otpEnabled is required' }),
+  }),
+};

@@ -3,6 +3,16 @@ import { sendSuccess } from '../../utils/ApiResponse.js';
 import { settingsService } from './settings.service.js';
 
 export const settingsController = {
+  getAuthSettings: asyncHandler(async (_req, res) => {
+    const data = await settingsService.getAuthSettings();
+    sendSuccess(res, { message: 'Auth settings', data });
+  }),
+
+  updateAuthSettings: asyncHandler(async (req, res) => {
+    const data = await settingsService.updateAuthSettings(req.body, req.user.id);
+    sendSuccess(res, { message: 'Auth settings updated', data });
+  }),
+
   getRetention: asyncHandler(async (_req, res) => {
     const data = await settingsService.getRetention();
     sendSuccess(res, { message: 'Chat retention policy', data });

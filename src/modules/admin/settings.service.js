@@ -7,6 +7,16 @@ import { logger } from '../../utils/logger.js';
 const SINGLETON_ID = 1;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// Auth-settings singleton projection (never leak the editor's full row).
+const authSettingSelect = {
+  id: true,
+  otpEnabled: true,
+  updatedAt: true,
+  updatedBy: {
+    select: { id: true, firstName: true, lastName: true, email: true },
+  },
+};
+
 // Only ever expose the admin's name/email on the policy — never their full row.
 const settingSelect = {
   id: true,
@@ -33,6 +43,34 @@ const attachmentDiskPath = (attachmentUrl) => {
 };
 
 export const settingsService = {
+  /** Read the singleton auth settings, creating it (OTP enabled) on first touch. */
+  async getAuthSettings() {
+    return prisma.authSetting.upsert({
+      where: { id: SINGLETON_ID },
+      create: { id: SINGLETON_ID },
+      update: {},
+      select: authSettingSelect,
+    });
+  },
+
+  /** True when WhatsApp phone-OTP verification is currently enabled. */
+  async isOtpEnabled() {
+    const setting = await this.getAuthSettings();
+    return setting.otpEnabled;
+  },
+
+  /** Update auth settings (the OTP master switch) and record who changed it. */
+  async updateAuthSettings(updates, adminId) {
+    const data = { updatedById: adminId };
+    if (updates.otpEnabled !== undefined) data.otpEnabled = updates.otpEnabled;
+    return prisma.authSetting.upsert({
+      where: { id: SINGLETON_ID },
+      create: { id: SINGLETON_ID, ...data },
+      update: data,
+      select: authSettingSelect,
+    });
+  },
+
   /**
    * Read the singleton chat-retention policy, creating it with defaults
    * (50 days, enabled) the first time it is touched.
