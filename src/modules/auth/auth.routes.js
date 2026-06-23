@@ -10,6 +10,8 @@ import {
   verifyOtpSchema,
   googleAuthSchema,
   setPhoneSchema,
+  setPasswordSchema,
+  changePasswordSchema,
 } from './auth.validation.js';
 
 const router = Router();
@@ -23,6 +25,22 @@ router.get('/me', authenticate, authController.me);
 
 // Attach a phone number to the signed-in account (post Google sign-in).
 router.post('/phone', authenticate, authLimiter, validate(setPhoneSchema), authController.setPhone);
+
+// Set an initial password (OAuth accounts) or change an existing one.
+router.post(
+  '/password/set',
+  authenticate,
+  authLimiter,
+  validate(setPasswordSchema),
+  authController.setPassword,
+);
+router.post(
+  '/password/change',
+  authenticate,
+  authLimiter,
+  validate(changePasswordSchema),
+  authController.changePassword,
+);
 
 // Public auth config (e.g. whether phone OTP is required) — no auth needed.
 router.get('/config', authController.config);

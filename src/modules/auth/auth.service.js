@@ -113,7 +113,8 @@ export const authService = {
       }
     }
 
-    return { ...authPayload(user, tokens), verification };
+    // Just registered with a password, so it's set.
+    return { ...authPayload({ ...user, hasPassword: true }, tokens), verification };
   },
 
   /**
@@ -224,7 +225,7 @@ export const authService = {
     });
 
     const { password: _pw, refreshToken: _rt, ...safe } = user;
-    return authPayload(safe, tokens);
+    return authPayload({ ...safe, hasPassword: Boolean(_pw) }, tokens);
   },
 
   /**
@@ -272,8 +273,10 @@ export const authService = {
     });
 
     const safe = await prisma.user.findUnique({ where: { id: user.id }, select: publicUser });
-    // No phone on file yet → the client should ask for one after sign-in.
-    return { ...authPayload(safe, tokens), needsPhone: !safe.phone };
+    // OAuth accounts start with no password; the client offers to add one (and a
+    // phone) after sign-in. `hasPassword` lets it show "add" vs "change".
+    const enriched = { ...safe, hasPassword: Boolean(user.password) };
+    return { ...authPayload(enriched, tokens), needsPhone: !safe.phone };
   },
 
   /**
@@ -321,7 +324,7 @@ export const authService = {
     });
 
     const { password: _pw, refreshToken: _rt, ...safe } = user;
-    return authPayload(safe, tokens);
+    return authPayload({ ...safe, hasPassword: Boolean(_pw) }, tokens);
   },
 
   async logout(userId) {
@@ -334,10 +337,56 @@ export const authService = {
   async me(userId) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: publicUser,
+      select: { ...publicUser, password: true },
     });
     if (!user) throw ApiError.notFound('User not found');
-    return user;
+    const { password, ...safe } = user;
+    return { ...safe, hasPassword: Boolean(password) };
+  },
+
+  /**
+   * Add a password to an account that has none yet — typically a Google sign-in
+   * user who wants the option of signing in with email + password too. Refuses
+   * if a password already exists (use `changePassword` for that).
+   */
+  async setPassword(userId, password) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw ApiError.notFound('User not found');
+    if (user.password) {
+      throw ApiError.badRequest('You already have a password — use change password instead');
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { password: await hashPassword(password) },
+      select: publicUser,
+    });
+    return { user: { ...updated, hasPassword: true } };
+  },
+
+  /**
+   * Change an existing password. Requires the current password and rejects a
+   * new password identical to the old one.
+   */
+  async changePassword(userId, currentPassword, newPassword) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw ApiError.notFound('User not found');
+    if (!user.password) {
+      throw ApiError.badRequest('Your account has no password yet — set one first');
+    }
+
+    const ok = await comparePassword(currentPassword, user.password);
+    if (!ok) throw ApiError.unauthorized('Your current password is incorrect');
+
+    const reused = await comparePassword(newPassword, user.password);
+    if (reused) throw ApiError.badRequest('New password must be different from your current one');
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { password: await hashPassword(newPassword) },
+      select: publicUser,
+    });
+    return { user: { ...updated, hasPassword: true } };
   },
 
   /** Public auth-related config the client needs before/independent of login. */

@@ -43,6 +43,33 @@ export const loginSchema = {
   }),
 };
 
+// Set a password on an account that has none yet (e.g. after Google sign-in).
+export const setPasswordSchema = {
+  body: z
+    .object({
+      password: z.string().min(6, 'Password must be at least 6 characters'),
+      confirmPassword: z.string().min(1, 'Please confirm your password'),
+    })
+    .refine((d) => d.password === d.confirmPassword, {
+      path: ['confirmPassword'],
+      message: 'Passwords do not match',
+    }),
+};
+
+// Change an existing password — current password required.
+export const changePasswordSchema = {
+  body: z
+    .object({
+      currentPassword: z.string().min(1, 'Your current password is required'),
+      newPassword: z.string().min(6, 'Password must be at least 6 characters'),
+      confirmPassword: z.string().min(1, 'Please confirm your password'),
+    })
+    .refine((d) => d.newPassword === d.confirmPassword, {
+      path: ['confirmPassword'],
+      message: 'Passwords do not match',
+    }),
+};
+
 export const refreshSchema = {
   body: z.object({
     refreshToken: z.string().min(1, 'Refresh token is required'),
