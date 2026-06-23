@@ -10,6 +10,7 @@ import recordRoutes from '../modules/records/record.routes.js';
 import reminderRoutes from '../modules/reminders/reminder.routes.js';
 import areaRoutes from '../modules/areas/area.routes.js';
 import statsRoutes from '../modules/stats/stats.routes.js';
+import chatRoutes from '../modules/chat/chat.routes.js';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use('/records', recordRoutes);
 router.use('/reminders', reminderRoutes);
 router.use('/areas', areaRoutes);
 router.use('/stats', statsRoutes);
+router.use('/chat', chatRoutes);
 
 export default router;

@@ -8,6 +8,7 @@ import swaggerUi from 'swagger-ui-express';
 
 import { env } from './config/env.js';
 import { openapiSpec } from './config/swagger.js';
+import { UPLOAD_DIR } from './config/upload.js';
 import apiRoutes from './routes/index.js';
 import { authController } from './modules/auth/auth.controller.js';
 import { validate } from './middlewares/validate.middleware.js';
@@ -45,6 +46,17 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(compression());
 if (!env.isProd) app.use(morgan('dev'));
+
+// ── Uploaded chat attachments (static) ─────────
+// Override helmet's same-origin CORP so the frontend (different origin in dev)
+// can load images/files directly via <img>/download links.
+app.use(
+  '/uploads',
+  express.static(UPLOAD_DIR, {
+    setHeaders: (res) =>
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+  }),
+);
 
 // ── Health check ───────────────────────────────
 app.get('/health', (_req, res) => {

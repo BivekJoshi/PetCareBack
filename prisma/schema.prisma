@@ -126,6 +126,11 @@ model User {
   reminders    Reminder[]
   area         AdministrativeArea? @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
+  // Chat / messaging
+  sentMessages     Message[]     @relation("SentMessages")
+  receivedMessages Message[]     @relation("ReceivedMessages")
+  deviceTokens     DeviceToken[]
+
   @@index([role])
   @@index([areaId])
   @@map("users")
@@ -377,4 +382,58 @@ model Appointment {
   @@index([vetId])
   @@index([status])
   @@map("appointments")
+}
+
+// ──────────────────────────────────────────────
+// Messaging / Chat
+// ──────────────────────────────────────────────
+
+enum MessageType {
+  DIRECT // one-to-one between two users
+  BROADCAST // announcement sent to every user (recipientId is null)
+}
+
+model Message {
+  id      String      @id @default(uuid())
+  type    MessageType @default(DIRECT)
+  content String      @default("") // may be empty when the message is an attachment only
+
+  // Optional file/document attachment (image, pdf, doc…).
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentType String? // MIME type, e.g. "image/png", "application/pdf"
+  attachmentSize Int? // bytes
+
+  senderId String
+  sender   User   @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  // Null for BROADCAST messages.
+  recipientId String?
+  recipient   User?   @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([type, createdAt])
+  // Fast lookup of a direct thread between two users, newest first.
+  @@index([senderId, recipientId, createdAt])
+  @@map("messages")
+}
+
+// Push-notification registration (e.g. Firebase Cloud Messaging) per device.
+model DeviceToken {
+  id       String  @id @default(uuid())
+  token    String  @unique
+  platform String? // "web" | "android" | "ios"
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("device_tokens")
 }
