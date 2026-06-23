@@ -215,13 +215,48 @@ export const authService = {
     // OAuth-only accounts have no password — steer them to their provider.
     if (!user.password) throw ApiError.unauthorized('Use "Sign in with Google" for this account');
 
-    const ok = await comparePassword(password, user.password);
-    if (!ok) throw ApiError.unauthorized('Invalid email or password');
+    const lockout = await settingsService.getLockoutPolicy();
 
+    // Already locked out? Block until the window passes.
+    if (lockout.enabled && user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
+      const mins = Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 60_000);
+      throw ApiError.tooManyRequests(
+        `Account locked due to too many failed attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`,
+      );
+    }
+
+    const ok = await comparePassword(password, user.password);
+    if (!ok) {
+      // Count the failure and, once the cap is hit, lock the account for a while.
+      if (lockout.enabled) {
+        const attempts = (user.failedLoginAttempts || 0) + 1;
+        if (attempts >= lockout.maxAttempts) {
+          const lockedUntil = new Date(Date.now() + lockout.durationMinutes * 60_000);
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { failedLoginAttempts: 0, lockedUntil },
+          });
+          throw ApiError.tooManyRequests(
+            `Too many failed attempts. Account locked for ${lockout.durationMinutes} minute${lockout.durationMinutes === 1 ? '' : 's'}.`,
+          );
+        }
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { failedLoginAttempts: attempts },
+        });
+        const left = lockout.maxAttempts - attempts;
+        throw ApiError.unauthorized(
+          `Invalid email or password. ${left} attempt${left === 1 ? '' : 's'} left before your account is locked.`,
+        );
+      }
+      throw ApiError.unauthorized('Invalid email or password');
+    }
+
+    // Success — clear any failure count / lock and issue a session.
     const tokens = buildTokens(user);
     await prisma.user.update({
       where: { id: user.id },
-      data: { refreshToken: tokens.refreshToken },
+      data: { refreshToken: tokens.refreshToken, failedLoginAttempts: 0, lockedUntil: null },
     });
 
     const { password: _pw, refreshToken: _rt, ...safe } = user;
@@ -469,7 +504,14 @@ export const authService = {
     await prisma.$transaction([
       prisma.user.update({
         where: { id: user.id },
-        data: { password: passwordHash, emailVerified: true, refreshToken: null },
+        // Proven email ownership; clear any lockout and revoke existing sessions.
+        data: {
+          password: passwordHash,
+          emailVerified: true,
+          refreshToken: null,
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
       }),
       prisma.passwordResetOtp.delete({ where: { userId: user.id } }),
     ]);

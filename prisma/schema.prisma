@@ -118,6 +118,10 @@ model User {
   isActive      Boolean @default(true)
   refreshToken  String?
 
+  // Login lockout tracking (policy lives in AuthSetting; admin-configurable).
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime? // when set and in the future, login is blocked
+
   // Where the owner lives — used to seed a pet's location and for census rollups.
   areaId    String?
   latitude  Float?
@@ -175,6 +179,11 @@ model AuthSetting {
   id              Int     @id @default(1)
   otpEnabled      Boolean @default(false) // WhatsApp phone OTP (off by default)
   emailOtpEnabled Boolean @default(true) // email OTP (primary verification)
+
+  // Account lockout — after N failed password attempts, block login for a while.
+  lockoutEnabled         Boolean @default(true)
+  lockoutMaxAttempts     Int     @default(5) // failed tries before locking
+  lockoutDurationMinutes Int     @default(5) // how long the account stays locked
 
   updatedById String?
   updatedBy   User?   @relation("AuthSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)

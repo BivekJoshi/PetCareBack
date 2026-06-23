@@ -12,6 +12,9 @@ const authSettingSelect = {
   id: true,
   otpEnabled: true,
   emailOtpEnabled: true,
+  lockoutEnabled: true,
+  lockoutMaxAttempts: true,
+  lockoutDurationMinutes: true,
   updatedAt: true,
   updatedBy: {
     select: { id: true, firstName: true, lastName: true, email: true },
@@ -66,11 +69,26 @@ export const settingsService = {
     return setting.emailOtpEnabled;
   },
 
-  /** Update auth settings (the OTP master switches) and record who changed it. */
+  /** The current account-lockout policy (enabled, max attempts, duration). */
+  async getLockoutPolicy() {
+    const setting = await this.getAuthSettings();
+    return {
+      enabled: setting.lockoutEnabled,
+      maxAttempts: setting.lockoutMaxAttempts,
+      durationMinutes: setting.lockoutDurationMinutes,
+    };
+  },
+
+  /** Update auth settings (OTP switches + lockout policy) and record who changed it. */
   async updateAuthSettings(updates, adminId) {
     const data = { updatedById: adminId };
     if (updates.otpEnabled !== undefined) data.otpEnabled = updates.otpEnabled;
     if (updates.emailOtpEnabled !== undefined) data.emailOtpEnabled = updates.emailOtpEnabled;
+    if (updates.lockoutEnabled !== undefined) data.lockoutEnabled = updates.lockoutEnabled;
+    if (updates.lockoutMaxAttempts !== undefined) data.lockoutMaxAttempts = updates.lockoutMaxAttempts;
+    if (updates.lockoutDurationMinutes !== undefined) {
+      data.lockoutDurationMinutes = updates.lockoutDurationMinutes;
+    }
     return prisma.authSetting.upsert({
       where: { id: SINGLETON_ID },
       create: { id: SINGLETON_ID, ...data },
