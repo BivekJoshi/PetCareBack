@@ -8,6 +8,14 @@ export const idParam = {
   params: z.object({ id: z.string().uuid('Invalid id') }),
 };
 
+// Coordinates arrive as multipart text fields, so coerce from string and treat
+// blank/missing as "not provided" rather than 0.
+const optionalCoord = (min, max) =>
+  z.preprocess(
+    (v) => (v === '' || v === undefined || v === null ? undefined : v),
+    z.coerce.number().min(min).max(max).optional(),
+  );
+
 // User submits a request. Documents arrive as multipart files (parsed by multer),
 // so only the text fields are validated here.
 export const createRoleRequestSchema = {
@@ -16,6 +24,8 @@ export const createRoleRequestSchema = {
       errorMap: () => ({ message: 'You can only request the VET or ADMIN role' }),
     }),
     reason: z.string().trim().max(2000).optional(),
+    latitude: optionalCoord(-90, 90),
+    longitude: optionalCoord(-180, 180),
   }),
 };
 

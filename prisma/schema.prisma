@@ -184,6 +184,10 @@ model RoleChangeRequest {
   // Supporting documents: a JSON array of { url, name, type, size } objects,
   // uploaded to /uploads (same store as chat attachments).
   documents     Json              @default("[]")
+  // Where the applicant practises / is based (optional). For a VET request this
+  // seeds the new vet profile's map pin when an admin approves the request.
+  latitude      Float?
+  longitude     Float?
   status        RoleRequestStatus @default(PENDING)
 
   // Set once an admin reviews the request.

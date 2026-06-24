@@ -21,6 +21,8 @@ const requestSelect = {
   requestedRole: true,
   reason: true,
   documents: true,
+  latitude: true,
+  longitude: true,
   status: true,
   adminNote: true,
   reviewedAt: true,
@@ -34,7 +36,7 @@ export const roleRequestService = {
   // ── User-facing ────────────────────────────────────────────────
 
   /** A user submits a new role-change request with optional documents. */
-  async create(userId, { requestedRole, reason, documents = [] }) {
+  async create(userId, { requestedRole, reason, documents = [], latitude, longitude }) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true },
@@ -62,6 +64,8 @@ export const roleRequestService = {
         requestedRole,
         reason: reason || null,
         documents,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
       },
       select: requestSelect,
     });
@@ -153,7 +157,14 @@ export const roleRequestService = {
   async review(id, adminId, { status, adminNote, overrideRole }) {
     const request = await prisma.roleChangeRequest.findUnique({
       where: { id },
-      select: { id: true, userId: true, status: true, requestedRole: true },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        requestedRole: true,
+        latitude: true,
+        longitude: true,
+      },
     });
     if (!request) throw ApiError.notFound('Request not found');
     if (request.status !== 'PENDING') {
@@ -165,6 +176,23 @@ export const roleRequestService = {
     const updated = await prisma.$transaction(async (tx) => {
       if (status === 'APPROVED') {
         await tx.user.update({ where: { id: request.userId }, data: { role: grantedRole } });
+
+        // Granting VET creates the vet profile (if missing) so the new vet shows
+        // up in the directory/map, carrying the location from the request.
+        if (grantedRole === 'VET') {
+          await tx.vet.upsert({
+            where: { userId: request.userId },
+            create: {
+              userId: request.userId,
+              latitude: request.latitude,
+              longitude: request.longitude,
+            },
+            update: {
+              ...(request.latitude != null ? { latitude: request.latitude } : {}),
+              ...(request.longitude != null ? { longitude: request.longitude } : {}),
+            },
+          });
+        }
       }
       return tx.roleChangeRequest.update({
         where: { id },

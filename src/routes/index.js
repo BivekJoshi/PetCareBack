@@ -15,6 +15,7 @@ import adminRoutes from '../modules/admin/admin.routes.js';
 import emailTemplateRoutes from '../modules/emailTemplates/emailTemplate.routes.js';
 import roleRequestRoutes from '../modules/roleRequests/role-request.routes.js';
 import speciesRoutes from '../modules/species/species.routes.js';
+import geoRoutes from '../modules/geo/geo.routes.js';
 
 const router = Router();
 
@@ -34,6 +35,7 @@ router.use('/vaccinations', vaccinationRoutes);
 router.use('/records', recordRoutes);
 router.use('/reminders', reminderRoutes);
 router.use('/areas', areaRoutes);
+router.use('/geo', geoRoutes);
 router.use('/stats', statsRoutes);
 router.use('/chat', chatRoutes);
 router.use('/admin', adminRoutes);

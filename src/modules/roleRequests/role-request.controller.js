@@ -18,6 +18,8 @@ export const roleRequestController = {
     const data = await roleRequestService.create(req.user.id, {
       requestedRole: req.body.requestedRole,
       reason: req.body.reason,
+      latitude: req.body.latitude,
+      longitude: req.body.longitude,
       documents: mapDocuments(req),
     });
     sendSuccess(res, { statusCode: 201, message: 'Role request submitted', data });
