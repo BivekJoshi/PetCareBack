@@ -410,6 +410,7 @@ model Vet {
   appointments Appointment[]   @relation("VetAppointments")
   vaccinations Vaccination[]
   records      MedicalRecord[]
+  services     Service[]
 
   @@index([clinicId])
   @@map("vets")
@@ -565,9 +566,13 @@ model Reminder {
 // Services & appointments
 // ──────────────────────────────────────────────
 
+// A care service is offered (and priced) by an individual vet — each vet builds
+// their own list after approval. There is no admin-managed global catalogue.
+// vetId is nullable only to preserve any pre-existing rows; new services are
+// always owned by the vet that creates them.
 model Service {
   id          String   @id @default(uuid())
-  name        String   @unique
+  name        String
   description String?
   priceCents  Int      @default(0)
   durationMin Int      @default(30)
@@ -575,8 +580,14 @@ model Service {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  vetId String?
+  vet   Vet?   @relation(fields: [vetId], references: [id], onDelete: Cascade)
+
   appointments Appointment[]
 
+  // A vet can't list the same service name twice; names may repeat across vets.
+  @@unique([vetId, name])
+  @@index([vetId])
   @@map("services")
 }
 

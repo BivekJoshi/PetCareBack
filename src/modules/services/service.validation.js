@@ -10,6 +10,10 @@ export const listServicesSchema = {
     limit: z.coerce.number().int().min(1).max(100).default(50),
     isActive: z.coerce.boolean().optional(),
     search: z.string().optional(),
+    // Scope to one vet's services (e.g. when booking with that vet)…
+    vetId: z.string().uuid().optional(),
+    // …or to the signed-in vet's own services.
+    mine: z.coerce.boolean().optional(),
   }),
 };
 

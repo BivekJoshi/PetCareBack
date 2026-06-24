@@ -78,16 +78,27 @@ export const appointmentService = {
       const vet = await prisma.vet.findUnique({ where: { id: input.vetId } });
       if (!vet) throw ApiError.badRequest('Vet does not exist');
     }
+
+    // The service is optional. When chosen it must belong to the booked vet
+    // (services are vet-owned). If no vet was picked but the service has one,
+    // default the appointment to that vet.
+    let vetId = input.vetId;
     if (input.serviceId) {
       const service = await prisma.service.findUnique({ where: { id: input.serviceId } });
       if (!service) throw ApiError.badRequest('Service does not exist');
+      if (service.vetId) {
+        if (vetId && vetId !== service.vetId) {
+          throw ApiError.badRequest('That service is not offered by the selected vet');
+        }
+        vetId = vetId || service.vetId;
+      }
     }
 
     return prisma.appointment.create({
       data: {
         petId: input.petId,
         ownerId: pet.ownerId,
-        vetId: input.vetId,
+        vetId,
         serviceId: input.serviceId,
         scheduledAt: input.scheduledAt,
         reason: input.reason,

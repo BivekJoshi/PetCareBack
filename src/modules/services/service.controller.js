@@ -4,7 +4,7 @@ import { serviceService } from './service.service.js';
 
 export const serviceController = {
   list: asyncHandler(async (req, res) => {
-    const { items, meta } = await serviceService.list(req.query);
+    const { items, meta } = await serviceService.list(req.query, req.user);
     sendSuccess(res, { message: 'Services fetched', data: { items, meta } });
   }),
 
@@ -14,17 +14,17 @@ export const serviceController = {
   }),
 
   create: asyncHandler(async (req, res) => {
-    const data = await serviceService.create(req.body);
+    const data = await serviceService.create(req.body, req.user);
     sendSuccess(res, { statusCode: 201, message: 'Service created', data });
   }),
 
   update: asyncHandler(async (req, res) => {
-    const data = await serviceService.update(req.params.id, req.body);
+    const data = await serviceService.update(req.params.id, req.body, req.user);
     sendSuccess(res, { message: 'Service updated', data });
   }),
 
   remove: asyncHandler(async (req, res) => {
-    await serviceService.remove(req.params.id);
+    await serviceService.remove(req.params.id, req.user);
     sendSuccess(res, { message: 'Service deleted' });
   }),
 };
