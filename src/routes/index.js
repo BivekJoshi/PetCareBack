@@ -13,6 +13,7 @@ import statsRoutes from '../modules/stats/stats.routes.js';
 import chatRoutes from '../modules/chat/chat.routes.js';
 import adminRoutes from '../modules/admin/admin.routes.js';
 import emailTemplateRoutes from '../modules/emailTemplates/emailTemplate.routes.js';
+import roleRequestRoutes from '../modules/roleRequests/role-request.routes.js';
 
 const router = Router();
 
@@ -22,6 +23,7 @@ router.get('/', (_req, res) => {
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
+router.use('/role-requests', roleRequestRoutes);
 router.use('/pets', petRoutes);
 router.use('/vets', vetRoutes);
 router.use('/services', serviceRoutes);

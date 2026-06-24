@@ -47,3 +47,12 @@ export const uploadAttachment = multer({
   fileFilter,
   limits: { fileSize: MAX_FILE_SIZE },
 }).single('file');
+
+// Supporting documents for a role-change request — up to 5 files in one go,
+// stored in the same /uploads area. Each is exposed under the `documents` field.
+export const MAX_ROLE_DOCUMENTS = 5;
+export const uploadRoleDocuments = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: MAX_FILE_SIZE },
+}).array('documents', MAX_ROLE_DOCUMENTS);

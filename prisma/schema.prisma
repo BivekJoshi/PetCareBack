@@ -25,6 +25,14 @@ enum Role {
   PET_OWNER
 }
 
+// Lifecycle of a user-submitted role-change request reviewed by an admin.
+enum RoleRequestStatus {
+  PENDING // awaiting admin review
+  APPROVED // admin approved; the user's role was changed
+  REJECTED // admin declined (see adminNote for the reason)
+  CANCELLED // withdrawn by the user before review
+}
+
 enum PetSpecies {
   DOG
   CAT
@@ -167,9 +175,43 @@ model User {
   // Super admin who last edited an email template.
   emailTemplates EmailTemplate[] @relation("EmailTemplateUpdatedBy")
 
+  // Role-change requests this user submitted, and (for admins) the ones they reviewed.
+  roleRequests         RoleChangeRequest[] @relation("UserRoleRequests")
+  reviewedRoleRequests RoleChangeRequest[] @relation("ReviewedRoleRequests")
+
   @@index([role])
   @@index([areaId])
   @@map("users")
+}
+
+// A user's request to change their own role (e.g. a pet owner applying to become
+// a VET or ADMIN). The user attaches supporting documents + a note; an admin
+// reviews them and approves (which changes the user's role) or rejects.
+model RoleChangeRequest {
+  id            String            @id @default(uuid())
+  userId        String
+  currentRole   Role // the user's role when the request was made (for the audit trail)
+  requestedRole Role // the role the user is applying for
+  reason        String? // free-text "additional information" supplied by the user
+  // Supporting documents: a JSON array of { url, name, type, size } objects,
+  // uploaded to /uploads (same store as chat attachments).
+  documents     Json              @default("[]")
+  status        RoleRequestStatus @default(PENDING)
+
+  // Set once an admin reviews the request.
+  adminNote    String? // the admin's note to the user (esp. the reason for a rejection)
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User  @relation("UserRoleRequests", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("ReviewedRoleRequests", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@map("role_change_requests")
 }
 
 // Singleton (id pinned to 1) holding auth-related toggles a super admin
