@@ -1,5 +1,6 @@
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { sendSuccess } from '../../utils/ApiResponse.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { authService } from './auth.service.js';
 
 export const authController = {
@@ -72,6 +73,14 @@ export const authController = {
   me: asyncHandler(async (req, res) => {
     const data = await authService.me(req.user.id);
     sendSuccess(res, { message: 'Current user', data });
+  }),
+
+  // Upload / change the signed-in user's profile photo (single image field).
+  updateAvatar: asyncHandler(async (req, res) => {
+    if (!req.file) throw ApiError.badRequest('No image uploaded');
+    const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    const data = await authService.updateAvatar(req.user.id, url);
+    sendSuccess(res, { message: 'Profile photo updated', data });
   }),
 
   config: asyncHandler(async (_req, res) => {

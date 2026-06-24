@@ -48,6 +48,21 @@ export const uploadAttachment = multer({
   limits: { fileSize: MAX_FILE_SIZE },
 }).single('file');
 
+// Profile photo upload — images only, smaller size cap. Exposed as `avatar`.
+const AVATAR_MIME = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']);
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5 MB
+
+const imageFilter = (_req, file, cb) => {
+  if (AVATAR_MIME.has(file.mimetype)) return cb(null, true);
+  cb(ApiError.badRequest('Profile photo must be a PNG, JPG, GIF or WebP image'));
+};
+
+export const uploadAvatar = multer({
+  storage,
+  fileFilter: imageFilter,
+  limits: { fileSize: MAX_AVATAR_SIZE },
+}).single('avatar');
+
 // Supporting documents for a role-change request — up to 5 files in one go,
 // stored in the same /uploads area. Each is exposed under the `documents` field.
 export const MAX_ROLE_DOCUMENTS = 5;

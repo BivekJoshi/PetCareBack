@@ -3,6 +3,7 @@ import { authController } from './auth.controller.js';
 import { validate } from '../../middlewares/validate.middleware.js';
 import { authenticate } from '../../middlewares/auth.middleware.js';
 import { authLimiter } from '../../middlewares/rateLimiter.middleware.js';
+import { uploadAvatar } from '../../config/upload.js';
 import {
   registerSchema,
   loginSchema,
@@ -24,6 +25,9 @@ router.post('/google', authLimiter, validate(googleAuthSchema), authController.g
 router.post('/refresh', validate(refreshSchema), authController.refresh);
 router.post('/logout', authenticate, authController.logout);
 router.get('/me', authenticate, authController.me);
+
+// Upload / change the signed-in user's profile photo (multipart `avatar`).
+router.post('/avatar', authenticate, uploadAvatar, authController.updateAvatar);
 
 // Attach a phone number to the signed-in account (post Google sign-in).
 router.post('/phone', authenticate, authLimiter, validate(setPhoneSchema), authController.setPhone);

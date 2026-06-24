@@ -379,6 +379,17 @@ export const authService = {
     return { ...safe, hasPassword: Boolean(password) };
   },
 
+  // Set the signed-in user's profile photo to a freshly uploaded image URL.
+  async updateAvatar(userId, avatarUrl) {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+      select: { ...publicUser, password: true },
+    });
+    const { password, ...safe } = user;
+    return { ...safe, hasPassword: Boolean(password) };
+  },
+
   /**
    * Add a password to an account that has none yet — typically a Google sign-in
    * user who wants the option of signing in with email + password too. Refuses
