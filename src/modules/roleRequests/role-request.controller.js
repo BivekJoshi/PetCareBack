@@ -12,6 +12,17 @@ const mapDocuments = (req) =>
     size: file.size,
   }));
 
+// The dynamic-field answers arrive as a JSON string in the multipart body.
+const parseFieldAnswers = (raw) => {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
 export const roleRequestController = {
   // ── User-facing ──
   create: asyncHandler(async (req, res) => {
@@ -20,6 +31,7 @@ export const roleRequestController = {
       reason: req.body.reason,
       latitude: req.body.latitude,
       longitude: req.body.longitude,
+      fieldAnswers: parseFieldAnswers(req.body.fields),
       documents: mapDocuments(req),
     });
     sendSuccess(res, { statusCode: 201, message: 'Role request submitted', data });

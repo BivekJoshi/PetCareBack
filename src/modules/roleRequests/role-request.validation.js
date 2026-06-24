@@ -26,6 +26,10 @@ export const createRoleRequestSchema = {
     reason: z.string().trim().max(2000).optional(),
     latitude: optionalCoord(-90, 90),
     longitude: optionalCoord(-180, 180),
+    // Answers to the admin-defined dynamic fields, sent as a JSON string (this
+    // is a multipart request). Parsed + validated against the field config in
+    // the service layer.
+    fields: z.string().max(10000).optional(),
   }),
 };
 

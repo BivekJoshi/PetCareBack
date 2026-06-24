@@ -33,6 +33,14 @@ enum RoleRequestStatus {
   CANCELLED // withdrawn by the user before review
 }
 
+// Input type of an admin-defined role-request field (see RoleRequestField).
+enum RoleRequestFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+}
+
 enum PetGender {
   MALE
   FEMALE
@@ -188,6 +196,10 @@ model RoleChangeRequest {
   // seeds the new vet profile's map pin when an admin approves the request.
   latitude      Float?
   longitude     Float?
+  // Snapshot of the admin-defined extra fields the applicant filled in, captured
+  // at submission so it stays stable even if the field config later changes.
+  // Shape: [{ key, label, type, value }]. Driven by RoleRequestField.
+  fieldValues   Json              @default("[]")
   status        RoleRequestStatus @default(PENDING)
 
   // Set once an admin reviews the request.
@@ -204,6 +216,29 @@ model RoleChangeRequest {
   @@index([userId])
   @@index([status])
   @@map("role_change_requests")
+}
+
+// Admin-defined extra fields shown on the role-request form, configured per
+// requested role (e.g. VET applicants must supply a "PAN Number" + "Registration
+// Number"). The applicant's answers are snapshotted onto RoleChangeRequest.fieldValues.
+model RoleRequestField {
+  id          String               @id @default(uuid())
+  role        Role // the requested role this field applies to (VET | ADMIN)
+  key         String // machine key stored in fieldValues, e.g. "panNumber"
+  label       String // human label shown on the form, e.g. "PAN Number"
+  type        RoleRequestFieldType @default(TEXT)
+  required    Boolean              @default(true)
+  placeholder String?
+  options     Json                 @default("[]") // choices for SELECT fields (array of strings)
+  order       Int                  @default(0) // display order within a role
+  isActive    Boolean              @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([role, key])
+  @@index([role])
+  @@map("role_request_fields")
 }
 
 // Singleton (id pinned to 1) holding auth-related toggles a super admin

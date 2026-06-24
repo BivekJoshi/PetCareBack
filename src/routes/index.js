@@ -14,6 +14,7 @@ import chatRoutes from '../modules/chat/chat.routes.js';
 import adminRoutes from '../modules/admin/admin.routes.js';
 import emailTemplateRoutes from '../modules/emailTemplates/emailTemplate.routes.js';
 import roleRequestRoutes from '../modules/roleRequests/role-request.routes.js';
+import roleRequestFieldRoutes from '../modules/roleRequestFields/role-request-field.routes.js';
 import speciesRoutes from '../modules/species/species.routes.js';
 import geoRoutes from '../modules/geo/geo.routes.js';
 
@@ -26,6 +27,7 @@ router.get('/', (_req, res) => {
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/role-requests', roleRequestRoutes);
+router.use('/role-request-fields', roleRequestFieldRoutes);
 router.use('/pets', petRoutes);
 router.use('/species', speciesRoutes);
 router.use('/vets', vetRoutes);

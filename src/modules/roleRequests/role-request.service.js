@@ -2,6 +2,7 @@ import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { logger } from '../../utils/logger.js';
 import { sendRoleDecisionEmail } from '../../integrations/mail.service.js';
+import { roleRequestFieldService } from '../roleRequestFields/role-request-field.service.js';
 
 // Shape returned to clients — never leak the requester's full user row.
 const requesterSelect = {
@@ -23,6 +24,7 @@ const requestSelect = {
   documents: true,
   latitude: true,
   longitude: true,
+  fieldValues: true,
   status: true,
   adminNote: true,
   reviewedAt: true,
@@ -36,7 +38,7 @@ export const roleRequestService = {
   // ── User-facing ────────────────────────────────────────────────
 
   /** A user submits a new role-change request with optional documents. */
-  async create(userId, { requestedRole, reason, documents = [], latitude, longitude }) {
+  async create(userId, { requestedRole, reason, documents = [], latitude, longitude, fieldAnswers = {} }) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true },
@@ -57,6 +59,10 @@ export const roleRequestService = {
       );
     }
 
+    // Validate the applicant's answers against the admin-configured fields for
+    // the requested role; throws if a required field is missing/invalid.
+    const fieldValues = await roleRequestFieldService.buildSnapshot(requestedRole, fieldAnswers);
+
     return prisma.roleChangeRequest.create({
       data: {
         userId,
@@ -66,6 +72,7 @@ export const roleRequestService = {
         documents,
         latitude: latitude ?? null,
         longitude: longitude ?? null,
+        fieldValues,
       },
       select: requestSelect,
     });
