@@ -69,6 +69,9 @@ export const vetService = {
           licenseNumber: input.licenseNumber,
           bio: input.bio,
           yearsExp: input.yearsExp ?? 0,
+          address: input.address,
+          latitude: input.latitude,
+          longitude: input.longitude,
         },
         include: vetInclude,
       });

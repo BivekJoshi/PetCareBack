@@ -10,6 +10,15 @@ const hash = (pw) => bcrypt.hash(pw, SALT_ROUNDS);
 async function main() {
   console.log('Seeding database…');
 
+  // ── Species catalogue (dogs and cats only by default) ──
+  const defaultSpecies = [
+    { key: 'DOG', name: 'Dog', emoji: '🐶', tint: '#F57C00', sortOrder: 1 },
+    { key: 'CAT', name: 'Cat', emoji: '🐱', tint: '#8E5DD9', sortOrder: 2 },
+  ];
+  for (const s of defaultSpecies) {
+    await prisma.species.upsert({ where: { key: s.key }, update: {}, create: s });
+  }
+
   // ── Administrative areas (province → district → municipality → ward) ──
   const province = await prisma.administrativeArea.upsert({
     where: { code: 'P3' },

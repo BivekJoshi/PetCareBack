@@ -6,7 +6,16 @@ const isPrivileged = (role) => role === 'ADMIN' || role === 'SUPER_ADMIN';
 const include = {
   pet: { select: { id: true, name: true, species: true } },
   owner: { select: { id: true, firstName: true, lastName: true, email: true } },
-  vet: { select: { id: true, specialization: true, user: { select: { firstName: true, lastName: true } } } },
+  vet: {
+    select: {
+      id: true,
+      specialization: true,
+      address: true,
+      latitude: true,
+      longitude: true,
+      user: { select: { firstName: true, lastName: true, phone: true } },
+    },
+  },
   service: { select: { id: true, name: true, priceCents: true } },
 };
 
@@ -83,6 +92,8 @@ export const appointmentService = {
         scheduledAt: input.scheduledAt,
         reason: input.reason,
         notes: input.notes,
+        latitude: input.latitude,
+        longitude: input.longitude,
       },
       include,
     });

@@ -16,6 +16,10 @@ export const listAppointmentsSchema = {
   }),
 };
 
+// Optional location the owner is requesting the visit from.
+const latitude = z.number().min(-90).max(90);
+const longitude = z.number().min(-180).max(180);
+
 export const createAppointmentSchema = {
   body: z.object({
     petId: z.string().uuid('A valid pet id is required'),
@@ -24,6 +28,8 @@ export const createAppointmentSchema = {
     serviceId: z.string().uuid().optional(),
     reason: z.string().optional(),
     notes: z.string().optional(),
+    latitude: latitude.optional(),
+    longitude: longitude.optional(),
   }),
 };
 
@@ -36,6 +42,8 @@ export const updateAppointmentSchema = {
       serviceId: z.string().uuid().nullable().optional(),
       reason: z.string().optional(),
       notes: z.string().optional(),
+      latitude: latitude.nullable().optional(),
+      longitude: longitude.nullable().optional(),
     })
     .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' }),
 };

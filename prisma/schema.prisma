@@ -33,18 +33,6 @@ enum RoleRequestStatus {
   CANCELLED // withdrawn by the user before review
 }
 
-enum PetSpecies {
-  DOG
-  CAT
-  BIRD
-  RABBIT
-  REPTILE
-  FISH
-  CATTLE
-  GOAT
-  OTHER
-}
-
 enum PetGender {
   MALE
   FEMALE
@@ -367,6 +355,12 @@ model Vet {
   yearsExp       Int     @default(0)
   isAvailable    Boolean @default(true)
 
+  // Where the vet practises — shown as a pin on the vet map so owners can find
+  // and contact the nearest vet. Set by an admin on the vet profile.
+  address   String?
+  latitude  Float?
+  longitude Float?
+
   clinicId String?
 
   createdAt DateTime @default(now())
@@ -386,11 +380,33 @@ model Vet {
 // Pets — the heart of the registry
 // ──────────────────────────────────────────────
 
+// Admin-managed catalogue of animal species. Replaces what used to be a fixed
+// `PetSpecies` enum, so administrators can add/retire species from the UI. A
+// pet stores this row's `key`; DOG and CAT are seeded by default.
+model Species {
+  id        String  @id @default(uuid())
+  key       String  @unique // canonical code stored on pets, e.g. "DOG"
+  name      String // display label, e.g. "Dog"
+  emoji     String  @default("🐾") // shown on cards and pet rows
+  tint      String  @default("#0E9594") // hex accent colour for the species card
+  isActive  Boolean @default(true) // inactive species are hidden from pickers
+  sortOrder Int     @default(0) // lower numbers appear first
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("species")
+}
+
 model Pet {
   id           String     @id @default(uuid())
   code         String     @unique // public registration code vets ask for, e.g. NP-PET-7F3K9
   name         String
-  species      PetSpecies @default(OTHER)
+  // Species is an admin-managed catalogue (see the Species model). We store the
+  // species' `key` (e.g. "DOG") as a string rather than a DB enum so admins can
+  // add new species at runtime without a migration.
+  species      String     @default("DOG")
   breed        String?
   gender       PetGender  @default(UNKNOWN)
   birthDate    DateTime?
@@ -531,6 +547,11 @@ model Appointment {
   status      AppointmentStatus @default(PENDING)
   reason      String?
   notes       String?
+
+  // Where the owner is requesting the visit from (optional). Captured via the
+  // "use current location" button or by dropping a pin on the map at booking.
+  latitude  Float?
+  longitude Float?
 
   petId     String
   ownerId   String

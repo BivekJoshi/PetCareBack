@@ -14,6 +14,7 @@ import chatRoutes from '../modules/chat/chat.routes.js';
 import adminRoutes from '../modules/admin/admin.routes.js';
 import emailTemplateRoutes from '../modules/emailTemplates/emailTemplate.routes.js';
 import roleRequestRoutes from '../modules/roleRequests/role-request.routes.js';
+import speciesRoutes from '../modules/species/species.routes.js';
 
 const router = Router();
 
@@ -25,6 +26,7 @@ router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/role-requests', roleRequestRoutes);
 router.use('/pets', petRoutes);
+router.use('/species', speciesRoutes);
 router.use('/vets', vetRoutes);
 router.use('/services', serviceRoutes);
 router.use('/appointments', appointmentRoutes);

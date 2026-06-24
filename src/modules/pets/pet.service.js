@@ -1,6 +1,7 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { generatePetCode } from '../../utils/petCode.js';
+import { speciesService } from '../species/species.service.js';
 
 const isPrivileged = (role) => role === 'ADMIN' || role === 'SUPER_ADMIN';
 const isVetOrPrivileged = (role) => role === 'VET' || isPrivileged(role);
@@ -76,6 +77,9 @@ export const petService = {
   },
 
   async create(input, actor) {
+    // A pet's species must be a valid, active catalogue entry.
+    if (input.species) await speciesService.assertValid(input.species);
+
     // Owners can only create pets for themselves.
     const ownerId = isPrivileged(actor.role) && input.ownerId ? input.ownerId : actor.id;
 
@@ -101,6 +105,7 @@ export const petService = {
 
   async update(id, data, actor) {
     await this.getById(id, actor); // enforces ownership
+    if (data.species) await speciesService.assertValid(data.species);
     return prisma.pet.update({
       where: { id },
       data,
