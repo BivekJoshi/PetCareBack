@@ -129,16 +129,15 @@ async function main() {
 
   // ── Services ─────────────────────────────────
   const services = [
-    { name: 'General Checkup', description: 'Routine health examination', priceCents: 5000, durationMin: 30 },
-    { name: 'Vaccination', description: 'Core vaccine administration', priceCents: 3500, durationMin: 20 },
-    { name: 'Grooming', description: 'Bath, trim and nail clipping', priceCents: 4000, durationMin: 60 },
-    { name: 'Dental Cleaning', description: 'Professional teeth cleaning', priceCents: 9000, durationMin: 45 },
+    {
+      name: 'General Checkup',
+      description: 'Routine health examination',
+      priceCents: 0,
+      durationMin: 30,
+    },
   ];
-  // Default services are global (no owning vet); names repeat across vets so
-  // there's no single-column unique to upsert on — match on the null-vet name.
   for (const s of services) {
-    const existing = await prisma.service.findFirst({ where: { vetId: null, name: s.name } });
-    if (!existing) await prisma.service.create({ data: s });
+    await prisma.service.upsert({ where: { name: s.name }, update: {}, create: s });
   }
 
   // ── A sample registered pet ──────────────────
